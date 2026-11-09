@@ -1,0 +1,213 @@
+<div class="inner-row">
+  <div class="inner">
+    @for (t of innerTabs; track t.key) {
+      <button [class.active]="inner() === t.key" (click)="inner.set(t.key)"><app-icon [name]="t.icon" [size]="13" /> {{ t.label }}</button>
+    }
+  </div>
+  <span class="hint">Use ⋮ on any row → Manage User to open that client's full workspace.</span>
+</div>
+
+@if (inner() !== 'trading') {
+  <div class="card placeholder">{{ inner() === 'overview' ? 'Overview' : inner() === 'users' ? 'User Management' : inner() === 'basket' ? 'Basket & Strategy' : 'Subscriptions & Billing' }} — not cloned yet.</div>
+} @else {
+
+<section class="card filters">
+  <div class="fhead">
+    <button class="link caps" (click)="filtersOpen.set(!filtersOpen())"><app-icon [name]="filtersOpen() ? 'chevron-down' : 'chevron-right'" [size]="11" /> Filters</button>
+    <button class="link muted" (click)="filtersOpen.set(!filtersOpen())">{{ filtersOpen() ? 'Hide' : 'Show' }}</button>
+  </div>
+  @if (filtersOpen()) {
+    <div class="frow">
+      <label><span class="label-caps">Basket</span>
+        <span class="sel"><select class="input" [ngModel]="basket()" (ngModelChange)="basket.set($event)">
+          <option value="">All Baskets</option>@for (b of baskets(); track b) { <option [value]="b">{{ b }}</option> }
+        </select><span class="cnt">{{ baskets().length }}</span></span></label>
+      <label><span class="label-caps">Strategy</span>
+        <span class="sel"><select class="input" [ngModel]="strategy()" (ngModelChange)="strategy.set($event)">
+          <option value="">All Strategies</option>@for (s of strategies(); track s) { <option [value]="s">{{ s }}</option> }
+        </select><span class="cnt">{{ strategies().length }}</span></span></label>
+      <label><span class="label-caps">Date Range</span>
+        <span class="dates">
+          <input class="input" type="date" [ngModel]="from()" (ngModelChange)="from.set($event); range.set('custom')" />
+          <span>→</span>
+          <input class="input" type="date" [ngModel]="to()" (ngModelChange)="to.set($event); range.set('custom')" />
+          <button class="chip" [class.on]="range() === 'today'" (click)="setRange('today')">Today</button>
+          <button class="chip" [class.on]="range() === '7d'" (click)="setRange('7d')">7D</button>
+          <button class="chip" [class.on]="range() === '30d'" (click)="setRange('30d')">30D</button>
+          <button class="chip" [class.on]="range() === 'mtd'" (click)="setRange('mtd')">MTD</button>
+        </span></label>
+      <span class="scope">Scope: {{ strategy() || 'All strategies' }} · {{ basket() || 'All baskets' }} · {{ data()?.accountsInScope ?? 0 }} accounts ({{ data()?.accountsOnPage ?? 0 }} loaded)</span>
+    </div>
+  }
+</section>
+
+@if (data(); as d) {
+  <div class="kpis">
+    <div class="card kpi">
+      <div class="kh"><span class="label-caps">Strategy P&amp;L (OMS) ⓘ</span><span class="kico orange"><app-icon name="bar-chart" [size]="14" /></span></div>
+      <div class="kv"><b class="mono" [class]="pnlClass(d.strategyPnl)">₹{{ d.strategyPnl | number: '1.0-0' }}</b><span class="tag">This page</span></div>
+      <small>{{ d.accountsOnPage }} accounts on this page · {{ d.accountsInScope }} in scope</small>
+    </div>
+    <div class="card kpi">
+      <div class="kh"><span class="label-caps">Active Accounts ⓘ</span><span class="kico purple"><app-icon name="users" [size]="14" /></span></div>
+      <div class="kv"><b class="mono">{{ d.activeAccounts }} / {{ d.accountsOnPage }}</b></div>
+      <small>{{ d.connectedAccounts }} connected · this page only</small>
+    </div>
+    <div class="card kpi">
+      <div class="kh"><span class="label-caps">Open Positions ⓘ</span><span class="kico red"><app-icon name="pin" [size]="14" /></span></div>
+      <div class="kv"><b class="mono">{{ d.openPositions }}</b><span class="tag">This page</span></div>
+      <small>on this page</small>
+    </div>
+  </div>
+}
+
+<div class="split" [class.collapsed]="collapsed()">
+  <!-- ================= users ================= -->
+  <section class="card users">
+    <header>
+      <div class="uh">
+        <h3><app-icon name="users" [size]="14" class="p" /> All Users</h3>
+        <small>{{ strategy() || 'All strategies' }} ·<br>{{ basket() || 'All baskets' }}</small>
+      </div>
+      <span class="feed"><i></i>Feed live</span>
+      <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh</label>
+      <button class="link" (click)="refreshPnl()"><app-icon name="refresh" [size]="11" /> Refresh P&amp;L</button>
+      <button class="sq" (click)="collapsed.set(!collapsed())" title="Collapse">{{ collapsed() ? '⇥' : '⇤' }}</button>
+    </header>
+    @if (!collapsed()) {
+      <div class="ufilters">
+        <input class="input" placeholder="Partner ID..." [(ngModel)]="partnerId" (keyup.enter)="applyList()" />
+        <input class="input" placeholder="User name..." [(ngModel)]="userName" (keyup.enter)="applyList()" />
+        <select class="input" [(ngModel)]="broker" (ngModelChange)="applyList()">
+          <option value="">All Brokers</option>
+          @for (b of ['5PAISA','ANT','ANGELONE','ZERODHA','UPSTOX','FYERS','SHAREINDIA','NUBRA']; track b) { <option [value]="b">{{ b }}</option> }
+        </select>
+        <button class="link" (click)="clearList()">Clear</button>
+      </div>
+      <div class="selrow">
+        <label class="chk"><input type="checkbox" [checked]="allChecked()" (change)="toggleAll()" /> All</label>
+        @if (checked().size) { <span class="selpill">{{ checked().size }} of {{ users().length }} selected <button (click)="clearSelection()">×</button></span> }
+        <span class="sp"></span>
+        <span class="muted">Sort</span>
+        <select class="input sortsel" [ngModel]="sort()" (ngModelChange)="sort.set($event)"><option value="name">Name</option><option value="pnl">P&amp;L</option></select>
+        <button class="link" (click)="sortAsc.set(!sortAsc())">{{ sortAsc() ? '↑' : '↓' }}</button>
+      </div>
+      <div class="ulist">
+        @for (u of users(); track u.clientId) {
+          <div class="urow" [class.active]="u.clientId === activeId()" [class.up]="u.strategyPnl > 0" [class.down]="u.strategyPnl < 0" (click)="open(u.clientId)">
+            <input type="checkbox" [checked]="checked().has(u.clientId)" (click)="toggleCheck(u, $event)" />
+            <span class="av">{{ initials(u.name) }}</span>
+            <div class="uinfo">
+              <strong>{{ u.name }}</strong>
+              <small><i class="dot" [class.ok]="u.sessionValid"></i> {{ u.broker }} · #{{ u.accountId }}</small>
+              @if (u.tokenStale) { <span class="pill orange">token stale</span> } @else { <span class="pill gray">{{ u.strategies }} strategies</span> }
+            </div>
+            <div class="upnl" [title]="'Strategy P&L · ' + (strategy() || 'All strategies') + ' · ' + (basket() || 'All baskets')">
+              <b class="mono" [class]="pnlClass(u.strategyPnl)">₹{{ u.strategyPnl | number: '1.0-0' }}</b>
+              <small class="mono">R <span [class]="pnlClass(u.realized)">₹{{ u.realized | number: '1.0-0' }}</span> · U <span [class]="pnlClass(u.unrealized)">₹{{ u.unrealized | number: '1.0-0' }}</span> · 2m old</small>
+              @if (u.excludedStrategies) { <small class="warn">⚠ {{ u.excludedStrategies }} excluded</small> }
+            </div>
+            <button class="more" (click)="$event.stopPropagation()">⋮</button>
+          </div>
+        } @empty { <div class="empty">No users match.</div> }
+      </div>
+    }
+  </section>
+
+  <!-- ================= user detail ================= -->
+  <section class="card udetail">
+    @if (detail(); as d) {
+      <header>
+        <h3><app-icon name="user" [size]="14" /> {{ d.account.name }} <small>#{{ d.account.accountId }} · {{ d.account.broker }}</small></h3>
+        <span class="pill" [class.green]="!d.account.tokenStale" [class.orange]="d.account.tokenStale">{{ d.account.tokenStale ? 'Token Stale' : 'Token Valid' }}</span>
+        <span class="muted small">✳ {{ strategy() || 'All Strategies' }} ▾</span>
+        <button class="link" (click)="clearSelection()">Clear selection</button>
+        <button class="btn sm" (click)="closeDetails()">✕ Close Details</button>
+      </header>
+
+      <div class="pnlcard">
+        <span class="label-caps">Strategy P&amp;L · {{ strategy() || 'All strategies' }}</span> <span class="tag">OMS ledger · server</span>
+        <b class="big mono" [class]="pnlClass(d.total)">₹{{ d.total | number: '1.0-0' }}</b>
+        <small class="mono">R <b [class]="pnlClass(d.realized)">₹{{ d.realized | number: '1.0-0' }}</b> · U <b [class]="pnlClass(d.unrealized)">₹{{ d.unrealized | number: '1.0-0' }}</b>
+          · {{ d.closed }} closed · {{ d.open }} open · {{ d.wins }}W/{{ d.losses }}L</small>
+        <small class="muted">marked {{ d.markedAt | date: 'HH:mm' }}</small>
+      </div>
+
+      <div class="section">
+        <button class="shead" (click)="positionsOpen.set(!positionsOpen())">{{ positionsOpen() ? '▾' : '▸' }} <app-icon name="pin" [size]="12" class="r" /> Positions <span class="cnt">{{ d.positions.length }}</span></button>
+        @if (positionsOpen()) {
+          <div class="table-wrap"><table>
+            <thead><tr><th>Side</th><th>Exch</th><th>Symbol</th><th>Product</th><th class="n">Qty</th><th class="n">Avg</th><th class="n">LTP</th><th class="n">Realized</th><th class="n">Unrealized</th><th class="n">P&amp;L%</th><th>Broker Acc.</th><th>Status</th></tr></thead>
+            <tbody>
+              @for (p of d.positions; track p.id) {
+                <tr>
+                  <td><span class="pill" [class.red]="p.entrySide === 'SELL'" [class.green]="p.entrySide === 'BUY'">{{ p.entrySide }}</span></td>
+                  <td>{{ p.exchange }}</td>
+                  <td class="mono">{{ p.displaySymbol }}</td>
+                  <td>{{ p.product }}</td>
+                  <td class="n">{{ p.netQty < 0 ? -p.netQty : p.netQty }}</td>
+                  <td class="n">{{ (p.entrySide === 'SELL' ? p.avgSell : p.avgBuy) | number: '1.2-2' }}</td>
+                  <td class="n">{{ p.ltp | number: '1.2-2' }}</td>
+                  <td class="n" [class]="pnlClass(p.realized)">₹{{ p.realized | number: '1.2-2' }}</td>
+                  <td class="n" [class]="pnlClass(p.unrealized)">₹{{ p.unrealized | number: '1.2-2' }}</td>
+                  <td class="n" [class]="pnlClass(p.pnlPct)">{{ p.pnlPct === null ? '—' : (p.pnlPct | number: '1.2-2') + '%' }}</td>
+                  <td class="mono">{{ d.account.accountId }}</td>
+                  <td><span class="pill" [class.cyan]="p.status === 'OPEN'" [class.green]="p.status === 'CLOSED'" [class.orange]="p.status === 'RISK'">{{ p.status }}</span></td>
+                </tr>
+              }
+            </tbody>
+          </table></div>
+        }
+      </div>
+
+      @if (d.tradesTotal > d.trades.length) {
+        <div class="notice">⚠ Showing the {{ d.trades.length }} most recent of {{ d.tradesTotal }} matching trades — {{ d.tradesTotal - d.trades.length }} older trades are not listed. Narrow the date range to see them.</div>
+      }
+
+      <div class="section">
+        <button class="shead" (click)="tradesOpen.set(!tradesOpen())">{{ tradesOpen() ? '▾' : '▸' }} <app-icon name="list" [size]="12" class="a" /> Trades <span class="cnt">{{ d.trades.length }}</span></button>
+        @if (tradesOpen()) {
+          <input class="input tfilter" placeholder="Filter trades — Correlation ID, Strategy or Instrument name..." [ngModel]="tradeFilter()" (ngModelChange)="tradeFilter.set($event)" />
+          <div class="table-wrap"><table>
+            <thead><tr><th>Trade</th><th>Strategy / Symbol</th><th>Lifecycle</th><th>Net Qty / Duration</th><th>Broker</th><th>Entry — Exit</th><th class="n">P&amp;L</th><th>Status</th></tr></thead>
+            <tbody>
+              @for (t of trades(); track t.tradeId) {
+                <tr (click)="expandedTrade.set(expandedTrade() === t.tradeId ? null : t.tradeId)">
+                  <td class="trade">
+                    <span class="mono">{{ expandedTrade() === t.tradeId ? '▾' : '▸' }} {{ t.symbol }}</span>
+                    <small class="mono">Trade ID: {{ short(t.tradeId, 22) }}</small>
+                    <small class="mono">Correlation: {{ short(t.correlation, 24) }}</small>
+                  </td>
+                  <td><b>{{ t.strategy }}</b><small class="mono">{{ t.symbol }}</small></td>
+                  <td>
+                    <span class="pill" [class.red]="t.entrySide === 'SELL'" [class.green]="t.entrySide === 'BUY'">{{ t.entrySide }}</span>
+                    <small>Exit: {{ t.exitSide }}</small><small>Entry Qty: {{ t.entryQty }} · Exit Qty: {{ t.exitQty }}</small>
+                    @if (!t.exitTime) { <small>No exit yet</small> }
+                  </td>
+                  <td><b class="mono">{{ t.netQty }}</b> {{ t.netQty ? 'open' : 'closed' }}<small>Duration: {{ t.duration }}</small></td>
+                  <td>{{ t.broker }}<small class="mono">#{{ t.accountId }}</small></td>
+                  <td class="mono">{{ t.entryTime | date: 'dd-MMM HH:mm' }}@if (t.exitTime) { <br>→ {{ t.exitTime | date: 'dd-MMM HH:mm' }} }</td>
+                  <td class="n" [class]="pnlClass(t.pnl)">{{ t.pnl === null ? '—' : '₹' + (t.pnl | number: '1.0-0') }}</td>
+                  <td><span class="pill" [class.orange]="t.status === 'OPEN'" [class.green]="t.status === 'CLOSED'">{{ t.status }}</span> <a class="lc">Lifecycle</a></td>
+                </tr>
+                @if (expandedTrade() === t.tradeId) {
+                  <tr class="xrow"><td colspan="8">
+                    <div class="tl">
+                      <div><i class="g"></i><b>Entry {{ t.entrySide }} {{ t.entryQty }}</b> <span class="mono">{{ t.entryTime | date: 'HH:mm:ss' }}</span></div>
+                      @if (t.exitTime) { <div><i class="r"></i><b>Exit {{ t.exitSide }} {{ t.exitQty }}</b> <span class="mono">{{ t.exitTime | date: 'HH:mm:ss' }}</span> · P&amp;L <span [class]="pnlClass(t.pnl)">₹{{ t.pnl | number: '1.2-2' }}</span></div> }
+                      @else { <div><i class="o"></i><b>Awaiting exit</b> · open {{ t.duration }}</div> }
+                      <div class="mono muted">Trade {{ t.tradeId }} · Corr {{ t.correlation }}</div>
+                    </div>
+                  </td></tr>
+                }
+              } @empty { <tr><td colspan="8" class="empty">No trades match.</td></tr> }
+            </tbody>
+          </table></div>
+        }
+      </div>
+    } @else {
+      <div class="empty big">Select a user on the left to see their strategy P&amp;L, positions and trades.</div>
+    }
+  </section>
+</div>
+}

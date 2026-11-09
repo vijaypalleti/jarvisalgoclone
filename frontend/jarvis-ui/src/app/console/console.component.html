@@ -1,0 +1,52 @@
+<div class="toolbar">
+  <button class="btn"><app-icon name="compare" [size]="14" />Compare Accounts</button>
+  <button class="btn" (click)="state.refresh()" [disabled]="state.loading()">
+    <app-icon name="refresh" [size]="13" [class.spin]="state.loading()" />Refresh
+  </button>
+  <button class="btn primary" (click)="export()"><app-icon name="download" [size]="14" />Export</button>
+</div>
+
+<div class="tabs-row">
+  <div class="tabs">
+    @for (t of tabs; track t.key) {
+      <button class="tab" [class.active]="active() === t.key" (click)="select(t.key)">
+        <app-icon [name]="t.icon" [size]="13" />
+        {{ t.label }}
+        @if (t.key === 'alerts' && state.alertsOpen() > 0) {
+          <span class="count">{{ state.alertsOpen() }}</span>
+        }
+      </button>
+    }
+  </div>
+
+  @if (state.overview(); as o) {
+    <div class="relay">
+      <span class="pill green dot">Relay {{ o.relay.live ? 'Live' : 'Down' }}</span>
+      <span>Dispatch <b class="g">{{ o.relay.dispatchPct }}%</b></span>
+      <span>Exec <b class="o">{{ o.relay.execPct }}%</b></span>
+      <span>DLQ <b class="r">{{ o.relay.dlqPct | number: '1.1-1' }}%</b></span>
+      <span>Lag <b>{{ o.relay.lag ?? '–' }}</b></span>
+    </div>
+  }
+</div>
+
+@if (state.overview(); as o) {
+  @if (o.deadLettersInRange > 0 || o.failedExecutionsInRange > 0) {
+    <div class="banner">
+      <app-icon name="alert-triangle" [size]="13" />
+      {{ o.deadLettersInRange | number }} dead letters and {{ o.failedExecutionsInRange | number }} failed executions in the
+      Overview range ({{ o.rangeFrom | date: 'dd MMM' }} – {{ o.rangeTo | date: 'dd MMM' }}) — check Infrastructure and Logs &amp; Audit.
+    </div>
+  }
+} @else if (state.loading()) {
+  <div class="loading-line">Loading health…</div>
+}
+
+@switch (active()) {
+  @case ('overview') { <app-overview-tab /> }
+  @case ('signals') { <app-live-signals-tab /> }
+  @case ('positions') { <app-positions-tab /> }
+  @case ('performance') { <app-performance-tab /> }
+  @case ('infrastructure') { <app-infrastructure-tab /> }
+  @default { <app-placeholder-tab [title]="activeLabel()" /> }
+}

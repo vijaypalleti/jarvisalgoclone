@@ -1,0 +1,161 @@
+<div class="backdrop" (click)="close()"></div>
+
+<div class="modal" role="dialog" aria-modal="true">
+  @if (detail(); as d) {
+    <header>
+      <strong>{{ d.signal.symbol }}</strong>
+      <span class="pill red">{{ d.signal.side }}</span>
+      <span class="pill blue">{{ d.signal.type }}</span>
+      <span class="pill green" [class.gray]="d.signal.status !== 'Open'">{{ d.signal.status }}</span>
+      <span class="sub">
+        {{ d.signal.exchange }} · {{ d.signal.segment }} · reached API {{ d.signal.reachedApiAt | date: 'dd MMM yyyy, HH:mm:ss.SSS' }}
+        · {{ d.signal.filled | number }} of {{ d.signal.requested | number }} filled · {{ d.signal.exited | number }} exited
+      </span>
+      <button class="x" (click)="close()"><app-icon name="x" [size]="16" /></button>
+    </header>
+
+    <div class="body">
+      <div class="stats-row">
+        <div class="stats">Success {{ d.success }} · Failed {{ d.failed }} · Pending {{ d.pending }} · Open {{ d.open }} · Closed {{ d.closed }}</div>
+        <div class="acts">
+          <button class="btn sm"><app-icon name="history" [size]="12" class="o" />View Lifecycle</button>
+          <button class="btn sm danger" (click)="forceExit()" [disabled]="busy() || d.signal.status !== 'Open'">
+            <app-icon name="alert-triangle" [size]="12" />{{ busy() ? 'Exiting…' : 'Force Exit' }}
+          </button>
+        </div>
+      </div>
+
+      <h4>Broker Account Execution Summary</h4>
+      <div class="filters">
+        <input class="input" placeholder="Client..." [(ngModel)]="f.client" (ngModelChange)="onFilter()" />
+        <input class="input mono" placeholder="Partner ID / account..." [(ngModel)]="f.account" (ngModelChange)="onFilter()" />
+        <select class="input" [(ngModel)]="f.broker" (ngModelChange)="onFilter()">
+          <option value="">All brokers</option>
+          @for (b of d.brokers; track b) { <option [value]="b">{{ b }}</option> }
+        </select>
+        <select class="input" [(ngModel)]="f.status" (ngModelChange)="onFilter()">
+          <option value="">All statuses</option>
+          <option value="COMPLETED">COMPLETED</option>
+          <option value="REJECTED">REJECTED</option>
+          <option value="PENDING">PENDING</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Client/Broker</th><th>Order Status</th><th>Chunks</th><th>Req</th><th>Fill</th><th>Pending</th>
+              <th>Rejected</th><th>Cancelled</th><th>Exit</th><th>Net Open</th><th>Avg Entry</th><th>Avg Exit</th>
+              <th>Retry</th><th>Modify</th><th>Reject Reason</th><th class="r">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (a of d.accounts.items; track a.clientId + a.brokerAccount) {
+              @let key = a.clientId + a.brokerAccount;
+              <tr class="main" [class.open]="expanded() === key" (click)="toggle(key)">
+                <td class="client">
+                  <div><span class="bullet">›</span> {{ a.clientId }}</div>
+                  <div class="meta">
+                    {{ a.broker }} · #{{ a.brokerAccount }}
+                    @if (a.hedge) {
+                      <span class="pill amber hedge">hedge</span>
+                      <span class="hb">⛨ hedge buy {{ a.req * 2 }}/{{ a.req * 2 }}</span>
+                    }
+                    @if (a.attempt) { <span class="attempt">attempt {{ a.attempt }}</span> }
+                  </div>
+                  <div class="oid mono">{{ a.brokerOrderId }}</div>
+                </td>
+                <td><span class="pill" [class.green]="a.orderStatus === 'COMPLETED'" [class.red]="a.orderStatus === 'REJECTED'">{{ a.orderStatus }}</span></td>
+                <td>{{ a.chunks ?? '—' }}</td>
+                <td class="n">{{ a.req }}</td>
+                <td class="n">{{ a.fill }}</td>
+                <td class="n">{{ a.pending }}</td>
+                <td class="n">{{ a.rejected }}</td>
+                <td class="n">{{ a.cancelled }}</td>
+                <td class="n">{{ a.exit }}</td>
+                <td class="n">{{ a.netOpen }}</td>
+                <td class="n">{{ a.avgEntry | number: '1.2-2' }}</td>
+                <td class="n">{{ a.avgExit != null ? (a.avgExit | number: '1.2-2') : '—' }}</td>
+                <td class="n">{{ a.retry }}</td>
+                <td class="n">{{ a.modify ?? '—' }}</td>
+                <td class="reason">{{ a.rejectReason ?? '—' }}</td>
+                <td class="r">
+                  <button class="attempts" (click)="toggle(key); $event.stopPropagation()">
+                    <app-icon name="logs" [size]="12" /> Attempts
+                  </button>
+                </td>
+              </tr>
+
+              @if (expanded() === key) {
+                <tr class="expand">
+                  <td colspan="16">
+                    @if (a.hedge; as h) {
+                      <div class="hedge-box">
+                        <div class="hb-head">
+                          <strong>SHORT Order &amp; Premium Hedge</strong>
+                          <span class="center">{{ a.clientId }} · {{ a.broker }} · #{{ a.brokerAccount }}</span>
+                          <span class="pill" [class.green]="a.fill > 0" [class.red]="a.fill === 0">{{ a.fill > 0 ? 'SHORT FILLED' : 'SHORT FAILED' }}</span>
+                        </div>
+                        <p>{{ h.summary }}</p>
+                        <p>
+                          Premium CE {{ a.req }} bought / {{ h.squared }} squared / <b class="red">{{ a.req - h.squared }}</b> <span class="red">open</span>
+                          · PE {{ a.req }} bought / {{ h.squared }} squared / <b class="red">{{ a.req - h.squared }}</b> <span class="red">open</span>
+                        </p>
+
+                        <table class="inner">
+                          <thead><tr><th>Short Order</th><th>Status</th><th>Req</th><th>Fill</th><th>Unfilled</th><th>Attempts</th><th>Broker Order</th><th>Premium CE/PE Bought</th><th>Completed</th></tr></thead>
+                          <tbody>
+                            @for (s of h.shortOrders; track s.brokerOrder) {
+                              <tr>
+                                <td>{{ s.label }}</td>
+                                <td><span class="pill" [class.red]="s.status === 'FAILED'" [class.green]="s.status === 'COMPLETED'">{{ s.status }}</span></td>
+                                <td class="n">{{ s.req }}</td><td class="n">{{ s.fill }}</td><td class="n">{{ s.unfilled }}</td><td class="n">{{ s.attempts }}</td>
+                                <td class="mono sm">{{ s.brokerOrder }}</td><td class="n">{{ s.premiumBought }}</td>
+                                <td>{{ s.completed | date: 'h:mm a' }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+
+                        <div class="sub-title">Premium Hedge Orders</div>
+                        <table class="inner">
+                          <thead><tr><th>Leg</th><th>Side</th><th>Instrument</th><th>Status</th><th>Req</th><th>Fill</th><th>Broker Order</th><th>Error</th></tr></thead>
+                          <tbody>
+                            @for (o of h.hedgeOrders; track o.brokerOrder) {
+                              <tr>
+                                <td><span class="pill blue">{{ o.leg }}</span></td>
+                                <td><span class="pill green">{{ o.side }}</span></td>
+                                <td class="mono sm">{{ o.instrument }}</td>
+                                <td><span class="pill green">{{ o.status }}</span></td>
+                                <td class="n">{{ o.req }}</td><td class="n">{{ o.fill }}</td>
+                                <td class="mono sm">{{ o.brokerOrder }}</td><td>{{ o.error ?? '—' }}</td>
+                              </tr>
+                            }
+                          </tbody>
+                        </table>
+                      </div>
+                    } @else {
+                      <div class="no-attempts">Single attempt — order {{ a.brokerOrderId }} {{ a.orderStatus | lowercase }} with {{ a.fill }}/{{ a.req }} filled. No hedge or retry activity.</div>
+                    }
+                  </td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <footer>
+        <span class="muted">{{ range() }}</span>
+        <div class="pager">
+          <button class="link" [disabled]="page() <= 1" (click)="go(page() - 1)">‹ Prev</button>
+          <span class="muted">Page {{ page() }} / {{ pages() }}</span>
+          <button class="link" [disabled]="page() >= pages()" (click)="go(page() + 1)">Next ›</button>
+        </div>
+      </footer>
+    </div>
+  } @else {
+    <div class="loading">Loading execution summary…</div>
+  }
+</div>

@@ -1,0 +1,108 @@
+<section class="card dash">
+  <header class="dhead">
+    <div>
+      <h2>🐳 Container Health Dashboard</h2>
+      <p>Real-time monitoring for {{ data()?.total ?? 0 }} container(s)</p>
+    </div>
+    <div class="actions">
+      <button class="act blue" (click)="load()" [disabled]="loading()"><app-icon name="refresh" [size]="12" /> Refresh</button>
+      <button class="act indigo" (click)="provisionAll()">⚙ Provision All</button>
+      <button class="act danger" (click)="stopAll()">■ Stop All Containers</button>
+      <button class="act violet" (click)="provisionAll()">＋ Provision Missing</button>
+      <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh (10s)</label>
+      <span class="last">Last: {{ lastLoaded() ? (lastLoaded() | date: 'h:mm:ss a') : '—' }}</span>
+    </div>
+  </header>
+
+  <div class="tiles">
+    @for (t of tiles(); track t.label) {
+      <div class="tile" [style.--c]="t.color">
+        <span class="label-caps">{{ t.label }}</span>
+        <b class="mono">{{ t.value }}</b>
+      </div>
+    }
+  </div>
+
+  @if (data(); as d) {
+    <div class="cache">
+      <strong>Contract Master Cache</strong>
+      <span class="muted">{{ d.contractMasterRows | number }} rows · loaded {{ d.contractMasterLoadedAt | date: 'HH:mm' }} · age {{ cacheAgeSec() | number }}s</span>
+      <button class="dark" (click)="reloadCache()">↻ Reload Contract Master Cache</button>
+    </div>
+  }
+
+  <div class="tools">
+    <input class="input search" placeholder="Search by Client ID, Container Name" [ngModel]="search()" (ngModelChange)="search.set($event)" />
+    <select class="input" [ngModel]="healthSel()" (ngModelChange)="healthSel.set($event); chip.set('All')">
+      <option>All</option><option>Healthy</option><option>Unhealthy</option><option>Degraded</option>
+    </select>
+    @for (c of ['All', 'Healthy', 'Unhealthy', 'Degraded']; track c) {
+      <button class="chipbtn" [class.on]="chip() === c" (click)="chip.set($any(c))">{{ c === 'All' ? 'All' : c }}</button>
+    }
+    <span class="sp"></span>
+    <div class="viewtog">
+      <button [class.on]="view() === 'cards'" (click)="view.set('cards')"><app-icon name="grid" [size]="12" /> Cards</button>
+      <button [class.on]="view() === 'table'" (click)="view.set('table')"><app-icon name="list" [size]="12" /> Table</button>
+    </div>
+    <span class="muted">{{ shown().length }} shown</span>
+  </div>
+
+  @if (view() === 'cards') {
+    <div class="grid">
+      @for (c of shown(); track c.name) {
+        @let h = healthOf(c);
+        <div class="cc" [class.bad]="h === 'Unhealthy'" [class.deg]="h === 'Degraded'">
+          <div class="ch">
+            <i class="led" [class.on]="c.status === 'Running'"></i>
+            <strong class="mono" [title]="c.name">{{ c.name }}</strong>
+            <span class="pill" [class.green]="c.status === 'Running'" [class.red]="c.status !== 'Running'">{{ c.status }}</span>
+            <button class="ib" title="Restart" (click)="act('restart', c)" [disabled]="busy() === c.name">↺</button>
+            <button class="ib" title="Stop" (click)="act('stop', c)" [disabled]="busy() === c.name || c.status !== 'Running'">■</button>
+          </div>
+          <div class="net">
+            <div><i [class.ok]="c.status === 'Running'"></i><span>Container</span><b>{{ c.status === 'Running' ? 'UP' : 'DOWN' }}</b></div>
+            <div><i class="ok"></i><span>Private IP</span><b class="mono">{{ c.privateIp }}</b></div>
+            <div><i class="ok"></i><span>Static Public IP</span><b class="mono">{{ c.staticPublicIp }}</b></div>
+            <div><i [class.ok]="c.nicMappingValid"></i><span>IP/NIC Mapping</span><b>{{ c.nicMappingValid ? 'Valid' : 'Invalid' }}</b></div>
+            <div><i [class.ok]="c.routingValid"></i><span>Outbound Routing</span><b>{{ c.routingValid ? 'Valid' : 'Invalid' }} <small>via src {{ c.privateIp }}</small></b></div>
+            <div class="gap"><i class="ok"></i><span>Broker Source IP</span><b class="mono">{{ c.staticPublicIp }}</b></div>
+          </div>
+          <dl>
+            <dt>Client ID</dt><dd class="mono">{{ c.clientId }}</dd>
+            <dt>Broker</dt><dd>{{ c.broker }}</dd>
+            <dt>Account(s)</dt><dd class="mono">{{ c.accounts }}</dd>
+            <dt>CPU</dt><dd class="mono" [class.hot]="c.cpuPct > 40">{{ c.cpuPct | number: '1.1-1' }}%</dd>
+            <dt>Memory</dt><dd class="mono">{{ c.memPct | number: '1.1-1' }}% ({{ c.memMb }}MB)</dd>
+            <dt>Redis</dt><dd class="mono ok">{{ c.redisOk ? '✓' : '✗' }} {{ latency(c.redisLatencyMs) }}</dd>
+            <dt>Mongo</dt><dd class="mono ok">{{ c.mongoOk ? '✓' : '✗' }} {{ latency(c.mongoLatencyMs) }}</dd>
+            <dt>LTP Feed</dt><dd class="ok">{{ c.ltpFeed ? '✓' : '✗' }}</dd>
+            <dt>Streams</dt><dd class="ok">{{ c.streams ? '✓' : '✗' }}</dd>
+            <dt>Stream Msgs</dt><dd class="mono">{{ c.streamMsgs }}</dd>
+            <dt>Restarts</dt><dd class="mono" [class.hot]="c.restartsToday > 1">{{ c.restarts }} ({{ c.restartsToday }} today)</dd>
+          </dl>
+        </div>
+      } @empty { <div class="empty">No containers match.</div> }
+    </div>
+  } @else {
+    <div class="table-wrap"><table>
+      <thead><tr><th>Container</th><th>Status</th><th>Health</th><th>Client</th><th>Broker</th><th>Account</th><th>Private IP</th><th>Public IP</th>
+        <th class="n">CPU</th><th class="n">Memory</th><th>Redis</th><th>Mongo</th><th class="n">Stream Msgs</th><th class="n">Restarts</th><th></th></tr></thead>
+      <tbody>
+        @for (c of shown(); track c.name) {
+          @let h = healthOf(c);
+          <tr>
+            <td class="mono"><i class="led" [class.on]="c.status === 'Running'"></i> {{ c.name }}</td>
+            <td><span class="pill" [class.green]="c.status === 'Running'" [class.red]="c.status !== 'Running'">{{ c.status }}</span></td>
+            <td><span class="pill" [class.green]="h === 'Healthy'" [class.amber]="h === 'Degraded'" [class.red]="h === 'Unhealthy'">{{ h }}</span></td>
+            <td class="mono">{{ c.clientId }}</td><td>{{ c.broker }}</td><td class="mono">{{ c.accounts }}</td>
+            <td class="mono">{{ c.privateIp }}</td><td class="mono">{{ c.staticPublicIp }}</td>
+            <td class="n" [class.hot]="c.cpuPct > 40">{{ c.cpuPct | number: '1.1-1' }}%</td><td class="n">{{ c.memPct | number: '1.1-1' }}% ({{ c.memMb }}MB)</td>
+            <td class="mono ok">✓ {{ c.redisLatencyMs | number: '1.3-3' }}ms</td><td class="mono ok">✓ {{ c.mongoLatencyMs | number: '1.3-3' }}ms</td>
+            <td class="n">{{ c.streamMsgs }}</td><td class="n" [class.hot]="c.restartsToday > 1">{{ c.restarts }}</td>
+            <td><button class="ib" (click)="act('restart', c)">↺</button> <button class="ib" (click)="act('stop', c)" [disabled]="c.status !== 'Running'">■</button></td>
+          </tr>
+        }
+      </tbody>
+    </table></div>
+  }
+</section>

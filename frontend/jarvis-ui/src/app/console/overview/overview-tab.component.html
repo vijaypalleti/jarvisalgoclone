@@ -1,0 +1,195 @@
+<ng-template #cardTpl let-c>
+  <div class="hub-card" [class.live]="c.live" [class.flash]="flashing().has(c.key)" [class.launch]="launching() === c.key"
+       [style.--tc]="c.color" [style.--accent]="c.color" (click)="go(c)">
+    <!-- row 1: icon | title over value | arrow -->
+    <div class="r1">
+      <span class="ico"><app-icon [name]="c.icon" [size]="17" [stroke]="1.8" /></span>
+      <div class="head">
+        <div class="title">{{ c.title }}</div>
+        <div class="value">
+          <span class="mono">
+            @if (c.segments) {
+              @for (s of c.segments; track $index) { <span [class.su]="s.accent">{{ s.t }}</span> }
+            } @else { {{ c.value }} }
+          </span>
+          @if (c.sub) { <small>{{ c.sub }}</small> }
+        </div>
+      </div>
+      <span class="arrow">→</span>
+    </div>
+    <!-- row 2: chips -->
+    <div class="chips">
+      @for (t of c.tags; track t.label) { <span class="chip" [class]="t.tone">{{ t.label }}</span> }
+    </div>
+    @if (c.live) { <span class="live-badge"><i></i>LIVE</span> }
+  </div>
+</ng-template>
+
+<div class="top-grid">
+ <section class="card hub-shell">
+  <div class="hub" #hub>
+    <svg class="ov-links" [attr.width]="svgSize().w" [attr.height]="svgSize().h" aria-hidden="true">
+      <defs>
+        <filter id="ovSpark" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="2.4" result="b" />
+          <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+
+      @for (l of connectors(); track l.id) {
+        <g class="ov-rail" [attr.stroke]="l.color" [attr.fill]="l.color">
+          <path class="ov-rail-base" [attr.d]="l.d" />
+          <path class="ov-rail-bead" [attr.d]="l.d" />
+          <circle class="ov-rail-end" r="2.5" [attr.cx]="l.x1" [attr.cy]="l.y1" />
+          <circle class="ov-rail-end" r="2.5" [attr.cx]="l.x2" [attr.cy]="l.y2" />
+          <!-- absolute url(): with <base href="/"> a bare #id breaks in Firefox/Safari -->
+          <circle class="ov-rail-spark" r="4.2" [attr.filter]="'url(' + svgRef() + '#ovSpark)'" opacity="0">
+            <animateMotion [attr.path]="l.d" dur="2.4s" [attr.begin]="l.begin + 's'" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0;1;1;0" keyTimes="0;0.08;0.9;1" dur="2.4s"
+                     [attr.begin]="l.begin + 's'" repeatCount="indefinite" />
+          </circle>
+        </g>
+      }
+    </svg>
+
+    <div class="col">
+      @for (c of left(); track c.key; let i = $index) {
+        <div #cardEl class="slot" [style.animation-delay]="i * 120 + 'ms'"><ng-container *ngTemplateOutlet="cardTpl; context: { $implicit: c }" /></div>
+      }
+    </div>
+
+    <div class="core-wrap">
+      <div class="core-box">
+        <div class="aura"></div>
+        <div class="core" #core>
+          <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+          <div class="dial">
+            <span class="ticks"></span>
+            <span class="sweep"></span>
+            <span class="star">✦</span>
+          </div>
+          <div class="name">JARVIS</div>
+          <div class="sub">OBSERVABILITY</div>
+          <div class="status"><i></i>{{ state.overview() ? 'LIVE & CONNECTED' : 'CONNECTING…' }}</div>
+        </div>
+      </div>
+      <div class="stream"><i></i>REAL-TIME DATA STREAMING</div>
+    </div>
+
+    <div class="col">
+      @for (c of right(); track c.key; let i = $index) {
+        <div #cardEl class="slot" [style.animation-delay]="i * 120 + 60 + 'ms'"><ng-container *ngTemplateOutlet="cardTpl; context: { $implicit: c }" /></div>
+      }
+    </div>
+  </div>
+
+  <div class="hub-bottom">
+    <div class="mini activity">
+      <header><h4>Today's activity</h4><small>Signals per hour · IST</small></header>
+      <div class="bars">
+        @for (h of activity()?.hours ?? []; track h.hour) {
+          <div class="bar-col">
+            <span class="bv mono">{{ h.signals }}</span>
+            <div class="bar-track"><div class="bar" [style.height.%]="(h.signals / maxHour()) * 100"></div></div>
+            <span class="bl mono">{{ h.hour < 10 ? '0' + h.hour : h.hour }}</span>
+          </div>
+        }
+      </div>
+      @if (activity()?.funnel; as f) {
+        <div class="funnel">
+          <div><b class="mono">{{ f.signals }}</b><span>Signals</span></div><i>→</i>
+          <div><b class="mono">{{ f.orders | number }}</b><span>Orders</span></div><i>→</i>
+          <div><b class="mono g">{{ f.filled | number }}</b><span>Filled · {{ fillPct() }}%</span></div>
+          <div><b class="mono r">{{ f.rejected }}</b><span>Rejected</span></div>
+          <div><b class="mono">{{ f.working }}</b><span>Working</span></div>
+        </div>
+      }
+    </div>
+
+    <div class="mini attention">
+      <header><h4>Needs attention</h4><small>Soonest first</small></header>
+      <div class="att-head"><span>Subscriptions ending in 7 days</span><a (click)="scrollTo('subscription-watch')">View all →</a></div>
+      @for (s of endingSoon(); track s.accountId) {
+        <div class="att-row">
+          <span><strong>{{ s.name }}</strong> <small class="mono">{{ s.accountId }}</small></span>
+          <span class="pill amber">{{ s.daysLeft }} day{{ s.daysLeft === 1 ? '' : 's' }} left</span>
+        </div>
+      } @empty { <div class="att-ok">No subscriptions ending in the next 7 days.</div> }
+
+      <div class="att-head"><span>Broker sessions to refresh</span><a (click)="scrollTo('session-health')">View all →</a></div>
+      @if (sessions(); as s) {
+        @if (s.notRefreshed.length === 0) {
+          <div class="att-ok">All {{ s.totalSessions }} eligible accounts have a valid session today.</div>
+        } @else {
+          @for (n of s.notRefreshed.slice(0, 3); track n.accountId) {
+            <div class="att-row"><span><strong>{{ n.name }}</strong> <small class="mono">{{ n.broker }} {{ n.accountId }}</small></span><span class="pill red">refresh</span></div>
+          }
+        }
+      }
+    </div>
+  </div>
+ </section>
+
+  <app-recent-alerts />
+</div>
+
+<div class="bottom-grid">
+  <section class="card panel" id="subscription-watch">
+    <header>
+      <span class="hico purple"><app-icon name="tag" [size]="15" /></span>
+      <div>
+        <h3>Subscription Watch</h3>
+        <p>Active subscriptions ending within 7 days · {{ subs()?.total ?? 0 }} subscription(s), {{ subs()?.total ?? 0 }} account(s)</p>
+      </div>
+      <span class="badge red">{{ subs()?.total ?? 0 }}</span>
+    </header>
+    <div class="progress-line"></div>
+    <div class="sub-list">
+      @for (s of subs()?.items ?? []; track s.accountId) {
+        <div class="sub-row">
+          <i class="dot"></i>
+          <div class="who">
+            <div><strong>{{ s.name }}</strong> <span class="muted">· {{ s.broker }} {{ s.accountId }}</span></div>
+            <div class="small">{{ s.plan }} · ends {{ s.endsAt | date: 'dd-MMM HH:mm' }}</div>
+          </div>
+          <span class="days mono">{{ s.daysLeft }}<small>d</small></span>
+        </div>
+      }
+    </div>
+    <footer>
+      <span class="muted">{{ subsRange() }}</span>
+      <div class="pager">
+        <button class="btn sm" [disabled]="subsPage() <= 1" (click)="subsPage.set(subsPage() - 1)">Prev</button>
+        <span>Page {{ subsPage() }} / {{ subsPages() }}</span>
+        <button class="btn sm" [disabled]="subsPage() >= subsPages()" (click)="subsPage.set(subsPage() + 1)">Next</button>
+      </div>
+    </footer>
+  </section>
+
+  <section class="card panel" id="session-health">
+    <header>
+      <span class="hico blue"><app-icon name="radio" [size]="15" /></span>
+      <div>
+        <h3>Broker Session Health</h3>
+        <p>Subscribed broker accounts whose session token wasn't refreshed today · {{ sessions()?.excludedDelta ?? 0 }} Delta account(s) excluded</p>
+      </div>
+      <span class="badge green">{{ sessions()?.notRefreshed?.length ?? 0 }}</span>
+    </header>
+    @if (sessions(); as s) {
+      <div class="session-bar">
+        <div class="track"><div class="fill" [style.width.%]="s.totalSessions ? (s.liveToday / s.totalSessions) * 100 : 0"></div></div>
+        <span class="muted">{{ s.liveToday }} / {{ s.totalSessions }} sessions live today</span>
+      </div>
+      @if (s.notRefreshed.length === 0) {
+        <div class="all-good">
+          <app-icon name="check-circle" [size]="18" />
+          <span>Every subscribed broker account has a valid session today.</span>
+        </div>
+      } @else {
+        @for (n of s.notRefreshed; track n.accountId) {
+          <div class="sub-row"><i class="dot"></i><div class="who"><strong>{{ n.name }}</strong> · {{ n.broker }} {{ n.accountId }}</div></div>
+        }
+      }
+    }
+  </section>
+</div>

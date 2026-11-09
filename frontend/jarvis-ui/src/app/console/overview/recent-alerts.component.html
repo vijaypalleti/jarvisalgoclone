@@ -1,0 +1,101 @@
+<section class="card alerts">
+  <header>
+    <app-icon name="bell" [size]="15" />
+    <h3>Recent Alerts</h3>
+    @if (data(); as d) {
+      @if (d.openCount > 0) {
+        <span class="pill amber dot status">{{ d.openCount }} OPEN · {{ d.criticalCount }} CRITICAL</span>
+      } @else {
+        <span class="pill green dot status">ALL CLEAR</span>
+      }
+    }
+  </header>
+  <div class="meta">
+    Rejections: today (IST) ·
+    @if (refreshing() && !data()) { refreshing… } @else { checked {{ data()?.checkedAt | date: 'HH:mm:ss' }} }
+  </div>
+
+  @if (data(); as d) {
+    @if (d.accounts.length === 0 && !search) {
+      <div class="clear">No rejections in the window and no open issues — every subsystem is running clean.</div>
+    } @else {
+      <div class="broker-cards">
+        @for (c of chips(); track c.broker) {
+          <button class="bcard" [class.active]="search === c.broker" (click)="onSearch(search === c.broker ? '' : c.broker)">
+            <div class="bc-top">
+              <b>{{ c.broker }}</b>
+              @if (c.open > 0) { <span class="pill red dot">{{ c.open }} open</span> } @else { <span class="pill gray">0 open</span> }
+            </div>
+            <small>{{ c.accounts }} acct{{ c.accounts === 1 ? '' : 's' }} · {{ c.rejections }} rej</small>
+            <i class="bc-bar"><i [style.width.%]="c.rejections ? (c.open / c.rejections) * 100 : 0"></i></i>
+          </button>
+        }
+      </div>
+      <div class="filter-row">
+        <span class="muted">{{ search ? 'Filtered: ' + search : 'Showing all brokers' }}@if (moreChips() > 0 && !search) { · +{{ moreChips() }} more }</span>
+        <input class="input search" placeholder="Search partner id / broker / symbol"
+               [ngModel]="search" (ngModelChange)="onSearch($event)" />
+      </div>
+
+      <div class="table">
+        <div class="thead">
+          <span>Account</span><span>Open</span><span>Symbol · Reason</span><span class="r">Last</span><span></span>
+        </div>
+        <div class="tbody">
+          @for (a of d.accounts; track a.id) {
+            <div class="row" [class.dim]="a.open === 0" [class.hot]="a.open > 0" (click)="toggle(a.id)">
+              <span class="acct"><span class="broker">{{ a.broker }}</span><span class="mono">{{ a.accountId }}</span></span>
+              <span><span class="pill dot" [class.red]="a.open > 0" [class.gray]="a.open === 0">{{ a.open }} OPEN / {{ a.total }}</span></span>
+              <span class="reason">
+                <span class="line1">
+                  <span class="mono sym">{{ a.symbol }}</span>
+                  <span class="code">{{ a.reasonCode }}</span>
+                  <span class="extra">+{{ a.extraSymbols }}</span>
+                </span>
+                <span class="msg">{{ a.message }}</span>
+              </span>
+              <span class="mono r last">{{ a.lastTime | date: 'HH:mm:ss' }}</span>
+              <span class="actions">
+                <button class="mini" (click)="toggle(a.id); $event.stopPropagation()" [title]="expanded() === a.id ? 'Collapse' : 'Expand'">
+                  <app-icon [name]="expanded() === a.id ? 'x' : 'list'" [size]="11" />
+                </button>
+                @if (a.open > 0) {
+                  <button class="mini" (click)="ackAccount(a.id, $event)" title="Acknowledge account"><app-icon name="check" [size]="11" /></button>
+                } @else {
+                  <button class="mini muted" disabled title="All acknowledged"><app-icon name="history" [size]="11" /></button>
+                }
+              </span>
+            </div>
+
+            @if (expanded() === a.id) {
+              <div class="detail">
+                <div class="dhead"><span>Time</span><span>Order</span><span>Strategy</span><span>Status</span><span>Reason</span><span>Qty</span><span>Att.</span><span></span></div>
+                @for (r of a.rejections; track r.id) {
+                  <div class="drow" [class.acked]="r.acknowledged">
+                    <span class="mono">{{ r.time | date: 'HH:mm:ss' }}</span>
+                    <span class="mono ellipsis">{{ r.order }}</span>
+                    <span class="mono">{{ r.strategyId }}</span>
+                    <span><span class="pill red dot">{{ r.status }}</span></span>
+                    <span class="ellipsis" [title]="r.reason">{{ r.reason }}</span>
+                    <span class="mono">{{ r.qty }}</span>
+                    <span class="mono">{{ r.attempts }}</span>
+                    <span>
+                      @if (!r.acknowledged) { <button class="btn sm ack" (click)="ackRejection(r.id)">Ack</button> }
+                      @else { <span class="muted">✓</span> }
+                    </span>
+                  </div>
+                }
+              </div>
+            }
+          }
+        </div>
+      </div>
+
+      <footer>
+        <button class="btn sm" (click)="ackAll()" [disabled]="d.openCount === 0">Acknowledge All</button>
+        <span class="muted">Showing {{ d.accounts.length }} of {{ d.totalAccounts }} accounts</span>
+        <button class="btn sm" (click)="viewLog()">View Full Alert Log →</button>
+      </footer>
+    }
+  }
+</section>

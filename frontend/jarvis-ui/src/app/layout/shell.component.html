@@ -1,0 +1,55 @@
+<aside class="sidebar" [class.expanded]="expanded" [class.pinned]="pinned()"
+       (mouseenter)="hovered.set(true)" (mouseleave)="hovered.set(false)">
+  <div class="brand">
+    <div class="logo">JARVIS</div>
+    @if (expanded) {
+      <span class="brand-name">Jarvis Algo</span>
+      <button class="pin" [class.on]="pinned()" (click)="pinned.set(!pinned())" title="Pin sidebar">
+        <app-icon name="pin" [size]="18" />
+      </button>
+    }
+  </div>
+
+  <nav>
+    @for (item of nav; track item.path) {
+      <a class="nav-item" [routerLink]="item.path" routerLinkActive="active" [title]="item.label">
+        <app-icon [name]="item.icon" [size]="19" [stroke]="1.7" />
+        @if (expanded) {
+          <span class="nav-label">{{ item.label }}</span>
+          @if (item.children) { <app-icon class="caret" name="chevron-down" [size]="14" /> }
+        }
+      </a>
+    }
+  </nav>
+
+  <div class="sidebar-foot">
+    <span class="live-pill"><i></i>Live</span>
+    <button class="sound" title="Sound alerts"><app-icon name="volume" [size]="13" /></button>
+  </div>
+</aside>
+
+<div class="main" [class.pinned]="pinned()">
+  <header class="topbar">
+    <div class="spacer"></div>
+    <button class="icon-btn" (click)="toggleTheme()" title="Toggle theme">
+      <app-icon [name]="dark() ? 'sun' : 'moon'" [size]="20" />
+    </button>
+    <a class="top-btn" routerLink="/admin/subscription"><app-icon name="gem" [size]="13" />Subscription</a>
+    <a class="top-btn" routerLink="/admin/logs"><app-icon name="logs" [size]="13" />Logs</a>
+    <div class="user" (click)="userMenu.set(!userMenu())">
+      <span class="avatar"><app-icon name="user" [size]="13" /></span>
+      <strong>Admin Algo</strong>
+      <app-icon name="chevron-down" [size]="14" />
+      @if (userMenu()) {
+        <div class="menu" (click)="$event.stopPropagation()">
+          <a>Profile</a><a>Settings</a><a class="danger">Logout</a>
+        </div>
+      }
+    </div>
+    <span class="net"><i></i><b>60.8</b> Mbps</span>
+  </header>
+
+  <main class="content">
+    <router-outlet />
+  </main>
+</div>

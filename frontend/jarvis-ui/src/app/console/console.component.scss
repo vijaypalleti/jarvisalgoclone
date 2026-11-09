@@ -1,0 +1,34 @@
+:host { display: block; }
+
+.toolbar { display: flex; justify-content: flex-end; gap: 10px; margin-bottom: 14px; }
+
+.tabs-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+
+.tabs {
+  display: inline-flex; gap: 2px; padding: 4px; background: var(--surface-2);
+  border: 1px solid var(--border); border-radius: 12px; flex-wrap: wrap;
+}
+.tab {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px;
+  border: 0; background: transparent; border-radius: 9px; color: var(--text-2); font-size: 12.5px; font-weight: 500;
+  &:hover { color: var(--text); }
+  &.active { background: var(--surface); color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+  .count { background: var(--amber-bg); color: var(--amber); font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 999px; }
+}
+
+.relay {
+  display: inline-flex; align-items: center; gap: 12px; font-size: 11px; color: var(--muted);
+  b { font-family: var(--mono); font-weight: 600; color: var(--text-2); }
+  .g { color: var(--green); } .o { color: var(--orange); } .r { color: var(--red); }
+}
+
+.banner {
+  display: flex; align-items: center; gap: 6px;
+  background: #fde8e8; border: 1px solid #fca5a5; color: #b91c1c;
+  border-radius: 6px; padding: 7px 10px; font-size: 11.5px; font-weight: 500; margin-bottom: 12px;
+}
+:host-context([data-theme='dark']) .banner { background: #3a1515; border-color: #7f1d1d; color: #fca5a5; }
+
+.loading-line { color: var(--muted); font-size: 12px; margin: 4px 0 12px; }
+
+:host ::ng-deep .spin svg { animation: spin 1s linear infinite; }

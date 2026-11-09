@@ -1,0 +1,162 @@
+<h2 class="page-title">Broker Live <small>Fyers · read-only</small></h2>
+
+<section class="card conn">
+  <span class="bico"><app-icon name="radio" [size]="16" /></span>
+  <div class="who">
+    <div class="title">
+      <strong>FYERS</strong>
+      @if (status(); as s) {
+        @if (s.connected) {
+          <span class="pill green dot">LIVE</span>
+          <span class="muted">{{ s.name }} · <span class="mono">{{ s.fyId }}</span> · app <span class="mono">{{ s.clientId }}</span></span>
+        } @else {
+          <span class="pill red dot">{{ s.configured ? 'DISCONNECTED' : 'NOT CONFIGURED' }}</span>
+          <span class="err">{{ s.error }}</span>
+        }
+      } @else {
+        <span class="pill gray">connecting…</span>
+      }
+    </div>
+    <div class="sub">
+      Read-only · token expires {{ status()?.tokenExpiresAt ? (status()!.tokenExpiresAt | date: 'dd MMM, HH:mm') : '—' }}
+      · updated {{ lastUpdated() ? (lastUpdated() | date: 'HH:mm:ss') : '—' }}
+    </div>
+  </div>
+  <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh 5s</label>
+  <button class="btn sm" (click)="load()" [disabled]="loading()"><app-icon name="refresh" [size]="12" /> Refresh</button>
+  <button class="btn sm" (click)="showToken.set(!showToken())"><app-icon name="key" [size]="12" /> Update token</button>
+</section>
+
+@if (showToken()) {
+  <section class="card token">
+    <p>Fyers access tokens expire daily. Paste the new one here (kept in API memory until restart; for persistence use <code>dotnet user-secrets set "Fyers:AccessToken" …</code>).</p>
+    <div class="row">
+      <input class="input mono" placeholder="Client ID (e.g. ABC123-200)" [(ngModel)]="tokenForm.clientId" />
+      <input class="input mono grow" type="password" placeholder="Access token" [(ngModel)]="tokenForm.accessToken" />
+      <button class="btn primary sm" (click)="saveToken()">Connect</button>
+    </div>
+  </section>
+}
+
+@for (e of errors(); track e) { <div class="warn"><app-icon name="alert-triangle" [size]="12" /> {{ e }}</div> }
+
+@if (status()?.connected) {
+  <div class="quotes">
+    @for (q of quotes(); track q.symbol) {
+      <div class="card quote">
+        <div class="qname">{{ q.name }}</div>
+        <div class="qlp mono">{{ q.ltp | number: '1.2-2' }}</div>
+        <div class="qch mono" [class]="pnlClass(q.change)">
+          {{ q.change > 0 ? '+' : '' }}{{ q.change | number: '1.2-2' }} ({{ q.changePct | number: '1.2-2' }}%)
+        </div>
+        <div class="qrange mono">O {{ q.open | number: '1.0-0' }} · H {{ q.high | number: '1.0-0' }} · L {{ q.low | number: '1.0-0' }}</div>
+      </div>
+    }
+  </div>
+
+  <div class="funds">
+    @for (f of fundCards(); track f.id) {
+      <div class="card fund">
+        <div class="label-caps">{{ f.title }}</div>
+        <div class="fval mono" [class]="f.id === 4 ? pnlClass(f.equityAmount) : ''">₹ {{ f.equityAmount | number: '1.2-2' }}</div>
+      </div>
+    }
+    @if (positions()?.overall; as o) {
+      <div class="card fund">
+        <div class="label-caps">Day P&amp;L (open {{ o.count_open }} / {{ o.count_total }})</div>
+        <div class="fval mono" [class]="pnlClass(o.pl_total)">₹ {{ o.pl_total | number: '1.2-2' }}</div>
+      </div>
+    }
+  </div>
+
+  <section class="card book">
+    <div class="book-tabs">
+      <button [class.active]="section() === 'positions'" (click)="section.set('positions')">Positions <span>{{ positions()?.items?.length ?? 0 }}</span></button>
+      <button [class.active]="section() === 'orders'" (click)="section.set('orders')">Order Book <span>{{ orders().length }}</span></button>
+      <button [class.active]="section() === 'trades'" (click)="section.set('trades')">Trade Book <span>{{ trades().length }}</span></button>
+      <button [class.active]="section() === 'holdings'" (click)="section.set('holdings')">Holdings <span>{{ holdings().length }}</span></button>
+      @if (section() === 'orders' && orders().length) {
+        <div class="ocounts">
+          @for (k of ['COMPLETED', 'PENDING', 'REJECTED', 'CANCELLED']; track k) {
+            @if (orderCounts()[k]) { <span class="pill" [class]="statusTone(k)">{{ k }} {{ orderCounts()[k] }}</span> }
+          }
+        </div>
+      }
+    </div>
+
+    <div class="table-wrap">
+      @switch (section()) {
+        @case ('positions') {
+          <table>
+            <thead><tr><th>Symbol</th><th>Product</th><th>Side</th><th class="n">Net Qty</th><th class="n">Net Avg</th><th class="n">Buy Qty &#64; Avg</th><th class="n">Sell Qty &#64; Avg</th><th class="n">LTP</th><th class="n">Realized</th><th class="n">Unrealized</th><th class="n">P&amp;L</th></tr></thead>
+            <tbody>
+              @for (p of positions()?.items ?? []; track p.id) {
+                <tr>
+                  <td class="mono b">{{ p.symbol }}</td><td>{{ p.productType }}</td>
+                  <td><span class="pill" [class.green]="p.side === 'BUY'" [class.red]="p.side === 'SELL'">{{ p.side }}</span></td>
+                  <td class="n">{{ p.netQty }}</td><td class="n">{{ p.netAvg | number: '1.2-2' }}</td>
+                  <td class="n">{{ p.buyQty }} &#64; {{ p.buyAvg | number: '1.2-2' }}</td>
+                  <td class="n">{{ p.sellQty }} &#64; {{ p.sellAvg | number: '1.2-2' }}</td>
+                  <td class="n">{{ p.ltp | number: '1.2-2' }}</td>
+                  <td class="n" [class]="pnlClass(p.realizedProfit)">{{ p.realizedProfit | number: '1.2-2' }}</td>
+                  <td class="n" [class]="pnlClass(p.unrealizedProfit)">{{ p.unrealizedProfit | number: '1.2-2' }}</td>
+                  <td class="n b" [class]="pnlClass(p.pl)">{{ p.pl | number: '1.2-2' }}</td>
+                </tr>
+              } @empty { <tr><td colspan="11" class="empty">No positions today.</td></tr> }
+            </tbody>
+          </table>
+        }
+        @case ('orders') {
+          <table>
+            <thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Type</th><th>Product</th><th class="n">Qty</th><th class="n">Filled</th><th class="n">Limit</th><th class="n">Traded</th><th>Status</th><th>Message</th><th>Order ID</th></tr></thead>
+            <tbody>
+              @for (o of orders(); track o.id) {
+                <tr>
+                  <td class="mono">{{ o.orderDateTime }}</td><td class="mono b">{{ o.symbol }}</td>
+                  <td><span class="pill" [class.green]="o.side === 'BUY'" [class.red]="o.side === 'SELL'">{{ o.side }}</span></td>
+                  <td>{{ o.type }}</td><td>{{ o.productType }}</td>
+                  <td class="n">{{ o.qty }}</td><td class="n">{{ o.filledQty }}</td>
+                  <td class="n">{{ o.limitPrice | number: '1.2-2' }}</td><td class="n">{{ o.tradedPrice | number: '1.2-2' }}</td>
+                  <td><span class="pill dot" [class]="statusTone(o.status)">{{ o.status }}</span></td>
+                  <td class="msg" [title]="o.message ?? ''">{{ o.message || '—' }}</td>
+                  <td class="mono sm">{{ o.id }}</td>
+                </tr>
+              } @empty { <tr><td colspan="12" class="empty">No orders today.</td></tr> }
+            </tbody>
+          </table>
+        }
+        @case ('trades') {
+          <table>
+            <thead><tr><th>Time</th><th>Symbol</th><th>Side</th><th>Product</th><th class="n">Qty</th><th class="n">Price</th><th class="n">Value</th><th>Trade #</th><th>Order #</th></tr></thead>
+            <tbody>
+              @for (t of trades(); track t.tradeNumber) {
+                <tr>
+                  <td class="mono">{{ t.orderDateTime }}</td><td class="mono b">{{ t.symbol }}</td>
+                  <td><span class="pill" [class.green]="t.side === 'BUY'" [class.red]="t.side === 'SELL'">{{ t.side }}</span></td>
+                  <td>{{ t.productType }}</td><td class="n">{{ t.tradedQty }}</td>
+                  <td class="n">{{ t.tradePrice | number: '1.2-2' }}</td><td class="n">{{ t.tradeValue | number: '1.2-2' }}</td>
+                  <td class="mono sm">{{ t.tradeNumber }}</td><td class="mono sm">{{ t.orderNumber }}</td>
+                </tr>
+              } @empty { <tr><td colspan="9" class="empty">No trades today.</td></tr> }
+            </tbody>
+          </table>
+        }
+        @case ('holdings') {
+          <table>
+            <thead><tr><th>Symbol</th><th class="n">Qty</th><th class="n">Avg Cost</th><th class="n">LTP</th><th class="n">Market Value</th><th class="n">P&amp;L</th></tr></thead>
+            <tbody>
+              @for (h of holdings(); track h.symbol) {
+                <tr>
+                  <td class="mono b">{{ h.symbol }}</td><td class="n">{{ h.quantity }}</td>
+                  <td class="n">{{ h.costPrice | number: '1.2-2' }}</td><td class="n">{{ h.ltp | number: '1.2-2' }}</td>
+                  <td class="n">{{ h.marketVal | number: '1.2-2' }}</td>
+                  <td class="n b" [class]="pnlClass(h.pl)">{{ h.pl | number: '1.2-2' }}</td>
+                </tr>
+              } @empty { <tr><td colspan="6" class="empty">No holdings.</td></tr> }
+            </tbody>
+          </table>
+        }
+      }
+    </div>
+  </section>
+}

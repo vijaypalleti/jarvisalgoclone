@@ -1,0 +1,129 @@
+<div class="subtabs">
+  <button [class.active]="subTab() === 'recent'" (click)="subTab.set('recent')"><app-icon name="send" [size]="13" />Recent Signals</button>
+  <button [class.active]="subTab() === 'queue'" (click)="subTab.set('queue')"><app-icon name="hourglass" [size]="13" />Queue Monitor</button>
+  <button [class.active]="subTab() === 'rejected'" (click)="subTab.set('rejected')"><app-icon name="ban" [size]="13" class="red" />Rejected Signals</button>
+</div>
+
+@if (subTab() !== 'recent') {
+  <div class="card placeholder">{{ subTab() === 'queue' ? 'Queue Monitor' : 'Rejected Signals' }} — not cloned yet.</div>
+} @else {
+
+<section class="card filters">
+  <div class="fhead">
+    <button class="link" (click)="filtersOpen.set(!filtersOpen())">
+      <app-icon [name]="filtersOpen() ? 'chevron-down' : 'chevron-right'" [size]="12" /> FILTERS
+    </button>
+    <button class="link muted" (click)="filtersOpen.set(!filtersOpen())">{{ filtersOpen() ? 'Hide' : 'Show' }}</button>
+  </div>
+
+  @if (filtersOpen()) {
+    <div class="fgrid">
+      <label><span class="label-caps">From</span><input type="date" class="input plain" [(ngModel)]="form.from" /></label>
+      <label><span class="label-caps">To</span><input type="date" class="input plain" [(ngModel)]="form.to" /></label>
+      <label class="w"><span class="label-caps">Symbol / Instrument</span><input class="input" placeholder="e.g. BANKNIFTY, NIFTY..." [(ngModel)]="form.symbol" (keyup.enter)="apply()" /></label>
+      <label class="w"><span class="label-caps">Correlation ID (entry or exit)</span><input class="input mono" placeholder="paste an entry or exit correlation id" [(ngModel)]="form.correlationId" (keyup.enter)="apply()" /></label>
+      <label class="w"><span class="label-caps">Client / Partner ID / Account</span><input class="input mono" placeholder="e.g. 55242972 or client id..." [(ngModel)]="form.client" (keyup.enter)="apply()" /></label>
+      <label class="w">
+        <span class="label-caps">Basket</span>
+        <span class="sel">
+          <select class="input" [(ngModel)]="form.basket">
+            <option value="">All Baskets</option>
+            @for (b of baskets(); track b) { <option [value]="b">{{ b }}</option> }
+          </select>
+          <span class="cnt">{{ baskets().length }}</span>
+        </span>
+      </label>
+      <label class="w">
+        <span class="label-caps">Strategy</span>
+        <span class="sel">
+          <select class="input" [(ngModel)]="form.strategy">
+            <option value="">All Strategies</option>
+            @for (s of strategies(); track s) { <option [value]="s">{{ s }}</option> }
+          </select>
+          <span class="cnt">{{ strategies().length }}</span>
+        </span>
+      </label>
+      <div class="factions">
+        <button class="btn sm" (click)="apply()">Apply</button>
+        <button class="link" (click)="today()">Today</button>
+        <button class="link" (click)="clear()">Clear filter</button>
+        <button class="link" (click)="savePreset()"><app-icon name="save" [size]="12" class="purple" /> Save preset</button>
+        <button class="link" (click)="loadPreset()"><app-icon name="folder" [size]="12" class="amber" /> Load preset</button>
+        <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh</label>
+      </div>
+    </div>
+    <p class="hint">Platform-wide — this tab has its own Basket/Strategy filters, independent of the header</p>
+  }
+</section>
+
+<div class="quick-row">
+  <div class="quick">
+    @for (q of quickFilters; track q.key) {
+      <button [class.active]="quick() === q.key" (click)="quick.set(q.key)">{{ q.label }}</button>
+    }
+  </div>
+  <span class="open-entry"><app-icon name="send" [size]="12" /> Open entry signals <b>{{ data()?.openEntrySignals ?? 0 }}</b></span>
+</div>
+
+<div class="list-head">
+  <h3>Recent Signals <small>{{ (data()?.total ?? 0) | number }} signal(s)</small></h3>
+  <div class="sort">
+    <button class="btn primary send" title="Manual signal entry — not wired yet"><app-icon name="send" [size]="13" />Send Signal</button>
+    <span class="muted">Sort (this page):</span>
+    @for (s of sorts; track s.key) {
+      <button class="btn sm" [class.on]="sort() === s.key" (click)="sort.set(s.key)">{{ s.label }}@if (sort() === s.key) { ▼ }</button>
+    }
+  </div>
+</div>
+
+<div class="signals" [class.loading]="loading()">
+  @for (s of data()?.items ?? []; track s.id) {
+    <article class="sig" (click)="selected.set(s)">
+      <div class="r1">
+        <span class="time mono">{{ s.reachedApiAt | date: 'HH:mm:ss.SSS' }}</span>
+        <div class="sym">
+          <strong>{{ s.symbol }}</strong>
+          <small>{{ s.exchange }} · {{ s.segment }} · #{{ s.strategyRef }}</small>
+        </div>
+        <span class="pill red side">{{ s.side }}</span>
+        <span class="pill blue type">{{ s.type }}</span>
+        @if (s.errors > 0) { <span class="pill red err"><app-icon name="alert-triangle" [size]="11" /> {{ s.errors }} Errors</span> }
+        <div class="progress">
+          <div class="bar"><div class="fill" [style.width.%]="pct(s)"></div><div class="exit" [style.width.%]="exitPct(s)"></div></div>
+          <div class="ptext">
+            {{ s.filled | number }} of {{ s.requested | number }} filled · {{ s.exited | number }} exited
+            @if (s.rejectedOrUnfilled > 0) { · {{ s.rejectedOrUnfilled | number }} rejected/unfilled }
+          </div>
+          @if (s.hedge; as h) {
+            <div class="ptext">⛨ hedge buy {{ h.buyFilled | number }} / {{ h.buyRequested | number }} · sell {{ h.sellFilled }} / {{ h.sellRequested }} · {{ h.open | number }} open</div>
+          }
+        </div>
+        <div class="counts">
+          <span>{{ s.openAccounts }} open / {{ s.closedAccounts }}</span>
+          <span>closed · {{ s.totalAccounts }} total</span>
+        </div>
+        <span class="pill green status" [class.gray]="s.status !== 'Open'">{{ s.status }}</span>
+        <span class="play"><app-icon name="play" [size]="11" /></span>
+      </div>
+      <div class="r2">
+        <span class="kind">{{ s.type | uppercase }}</span>
+        <span class="mono strat">{{ s.strategyName }}</span>
+        <span class="arr">→</span>
+        <span class="pill green">{{ s.status }}</span>
+        <span class="arr">→</span>
+        <span class="pill" [class.outline-orange]="s.exitStatus !== 'EXIT COMPLETED'" [class.green]="s.exitStatus === 'EXIT COMPLETED'">{{ s.exitStatus }}</span>
+        <span class="arr">–</span>
+        <span class="lifecycle"><app-icon name="history" [size]="11" /> Lifecycle</span>
+      </div>
+    </article>
+  } @empty {
+    <div class="card placeholder">{{ loading() ? 'Loading signals…' : 'No signals match these filters.' }}</div>
+  }
+</div>
+}
+
+@if (selected(); as s) {
+  <app-signal-detail-modal [sig]="s" (closed)="onClosed($event)" />
+}
+
+@if (toast()) { <div class="toast">{{ toast() }}</div> }

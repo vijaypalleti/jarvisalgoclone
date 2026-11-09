@@ -1,0 +1,141 @@
+<h2 class="page-title">Crypto Live <small>Delta Exchange · public market data, no login</small></h2>
+
+<section class="card hero">
+  <div class="sym">
+    <span class="coin">₿</span>
+    <div>
+      <strong>{{ ticker()?.symbol ?? market.feed()?.symbol ?? 'BTCUSD' }}</strong>
+      <small>Bitcoin Perpetual · Delta India</small>
+    </div>
+  </div>
+
+  <div class="price">
+    <span class="last mono" [class.flash-up]="dir() === 'up'" [class.flash-down]="dir() === 'down'"
+          [class.pos]="(ticker()?.changePct ?? 0) > 0" [class.neg]="(ticker()?.changePct ?? 0) < 0">
+      {{ ticker() ? (ticker()!.last | number: '1.1-1') : '—' }}
+    </span>
+    @if (ticker(); as t) {
+      <span class="chg mono" [class.pos]="t.changePct > 0" [class.neg]="t.changePct < 0">
+        {{ t.changePct > 0 ? '▲' : t.changePct < 0 ? '▼' : '' }} {{ t.changePct | number: '1.2-2' }}% <small>24h</small>
+      </span>
+    }
+  </div>
+
+  <div class="stats">
+    @if (ticker(); as t) {
+      <div><span class="label-caps">Mark</span><b class="mono">{{ t.mark | number: '1.1-1' }}</b></div>
+      <div><span class="label-caps">Index</span><b class="mono">{{ t.spot | number: '1.1-1' }}</b></div>
+      <div><span class="label-caps">24h High</span><b class="mono">{{ t.high | number: '1.1-1' }}</b></div>
+      <div><span class="label-caps">24h Low</span><b class="mono">{{ t.low | number: '1.1-1' }}</b></div>
+      <div><span class="label-caps">24h Volume</span><b class="mono">{{ t.volume | number: '1.0-0' }} BTC</b><small class="mono">${{ t.turnoverUsd / 1e6 | number: '1.1-1' }}M</small></div>
+      <div><span class="label-caps">Open Interest</span><b class="mono">{{ t.oi | number: '1.1-1' }} BTC</b><small class="mono">${{ t.oiUsd / 1e6 | number: '1.1-1' }}M</small></div>
+      <div><span class="label-caps">Funding</span><b class="mono" [class.pos]="t.fundingRate > 0" [class.neg]="t.fundingRate < 0">{{ t.fundingRate | number: '1.4-4' }}%</b></div>
+      <div><span class="label-caps">Bid / Ask</span><b class="mono"><span class="pos">{{ t.bestBid | number: '1.1-1' }}</span> / <span class="neg">{{ t.bestAsk | number: '1.1-1' }}</span></b></div>
+    }
+  </div>
+
+  <div class="conn">
+    @if (live()) {
+      <span class="pill green dot pulse">LIVE</span>
+    } @else if (market.linkState() === 'connected') {
+      <span class="pill amber dot">API OK · Delta reconnecting</span>
+    } @else {
+      <span class="pill red dot">{{ market.linkState() | uppercase }}</span>
+    }
+    <small>{{ ageSec() === null ? 'waiting for data…' : 'updated ' + ageSec() + 's ago' }}</small>
+  </div>
+</section>
+
+<section class="card storage">
+  <span class="label-caps">Pipeline</span>
+  <span class="step"><i class="dot" [class.on]="live()"></i>Delta WebSocket</span>
+  <span class="arrow">→</span>
+  @if (storage(); as s) {
+    <span class="step" [title]="s.redis.endpoint">
+      <i class="dot" [class.on]="s.redis.connected" [class.off]="!s.redis.connected"></i>
+      Redis <small class="mono">{{ s.redis.streamKey }} · {{ s.redis.streamLength | number }} in stream · {{ s.redis.pendingToSql }} pending</small>
+    </span>
+    <span class="arrow">→</span>
+    <span class="step" [title]="s.sql.server">
+      <i class="dot" [class.on]="s.sql.ready && !s.sql.error" [class.off]="!s.sql.ready || !!s.sql.error"></i>
+      SQL Server <small class="mono">{{ s.sql.database }}
+        @if (s.sql.stats; as st) { · {{ st.trades | number }} trades · {{ st.candles1m | number }} 1m candles · {{ st.tickerSnapshots | number }} snapshots }
+      </small>
+    </span>
+    <span class="meta">
+      last write {{ lastFlushAgo() === null ? '—' : lastFlushAgo() + 's ago' }}
+      @if (chartSources(); as cs) { · chart: {{ cs.sql }} SQL + {{ cs.delta }} Delta candles }
+    </span>
+    @if (s.persister.lastError) { <span class="perr" [title]="s.persister.lastError"><app-icon name="alert-triangle" [size]="11" /> {{ s.persister.lastError }}</span> }
+  } @else {
+    <span class="step"><i class="dot off"></i>storage status unavailable</span>
+  }
+</section>
+
+@if (market.feed()?.lastError && !market.feed()?.connected) {
+  <div class="warn"><app-icon name="alert-triangle" [size]="12" /> Delta feed: {{ market.feed()!.lastError }} — retrying automatically.</div>
+}
+
+<div class="grid">
+  <section class="card chart-card">
+    <header>
+      <h3>{{ ticker()?.symbol ?? 'BTCUSD' }} · {{ resolution() }}</h3>
+      <div class="res">
+        @for (r of resolutions; track r) {
+          <button [class.active]="resolution() === r" (click)="setResolution(r)">{{ r }}</button>
+        }
+      </div>
+      <small class="muted">IST · last candle updates live</small>
+    </header>
+    <div class="chart-wrap">
+      <div #chartEl class="chart"></div>
+      @if (chartLoading()) { <div class="overlay">Loading candles…</div> }
+      @if (chartError()) { <div class="overlay err">{{ chartError() }}</div> }
+    </div>
+  </section>
+
+  <div class="side">
+    <section class="card book">
+      <header><h3>Order Book</h3><small class="muted">top 15 · size in BTC</small></header>
+      <div class="bhead"><span>Price</span><span>Size</span><span>Total</span></div>
+      <div class="asks">
+        @for (l of asksDesc(); track l.price) {
+          <div class="lvl ask">
+            <i [style.width.%]="(l.total / maxBookTotal()) * 100"></i>
+            <span class="mono neg">{{ l.price | number: '1.1-1' }}</span>
+            <span class="mono">{{ l.size * contractValue() | number: '1.3-3' }}</span>
+            <span class="mono muted">{{ l.total * contractValue() | number: '1.3-3' }}</span>
+          </div>
+        }
+      </div>
+      <div class="spread mono">
+        @if (mid(); as m) { <b>{{ m | number: '1.1-1' }}</b> <small>spread {{ market.book()?.spread | number: '1.1-1' }}</small> }
+        @else { <small>waiting for book…</small> }
+      </div>
+      <div class="bids">
+        @for (l of market.book()?.bids ?? []; track l.price) {
+          <div class="lvl bid">
+            <i [style.width.%]="(l.total / maxBookTotal()) * 100"></i>
+            <span class="mono pos">{{ l.price | number: '1.1-1' }}</span>
+            <span class="mono">{{ l.size * contractValue() | number: '1.3-3' }}</span>
+            <span class="mono muted">{{ l.total * contractValue() | number: '1.3-3' }}</span>
+          </div>
+        }
+      </div>
+    </section>
+
+    <section class="card trades">
+      <header><h3>Recent Trades</h3><small class="muted">{{ market.trades().length }} · live</small></header>
+      <div class="thead"><span>Time (IST)</span><span>Price</span><span>Size (BTC)</span></div>
+      <div class="tlist">
+        @for (t of market.trades(); track $index) {
+          <div class="trow" [class.first]="$first">
+            <span class="mono muted">{{ t.time | date: 'HH:mm:ss' : '+0530' }}</span>
+            <span class="mono" [class.pos]="t.side === 'buy'" [class.neg]="t.side === 'sell'">{{ t.price | number: '1.1-1' }}</span>
+            <span class="mono">{{ t.size * contractValue() | number: '1.3-3' }}</span>
+          </div>
+        } @empty { <div class="empty">Waiting for trades…</div> }
+      </div>
+    </section>
+  </div>
+</div>

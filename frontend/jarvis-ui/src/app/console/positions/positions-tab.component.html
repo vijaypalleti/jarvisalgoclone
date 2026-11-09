@@ -1,0 +1,258 @@
+<section class="card filters">
+  <div class="fhead">
+    <button class="link caps" (click)="filtersOpen.set(!filtersOpen())">
+      <app-icon [name]="filtersOpen() ? 'chevron-down' : 'chevron-right'" [size]="11" /> Filters
+    </button>
+    <button class="link muted" (click)="filtersOpen.set(!filtersOpen())">{{ filtersOpen() ? 'Hide' : 'Show' }}</button>
+  </div>
+  @if (filtersOpen()) {
+    <div class="frow">
+      <input class="input grow" placeholder="Search client, account, symbol..." [(ngModel)]="f.search" (keyup.enter)="apply()" />
+      <select class="input sel" [(ngModel)]="f.broker" (ngModelChange)="apply()">
+        <option value="">All Brokers</option>
+        @for (b of brokers; track b) { <option [value]="b">{{ b }}</option> }
+      </select>
+      <input class="input w120" placeholder="Client ID" [(ngModel)]="f.clientId" (keyup.enter)="apply()" />
+      <input class="input w120" placeholder="Partner ID" [(ngModel)]="f.partnerId" (keyup.enter)="apply()" />
+      <button class="btn sm" (click)="apply()">Apply</button>
+      <button class="link" (click)="clear()">Clear</button>
+      <label class="chk"><input type="checkbox" [checked]="f.openOnly" (change)="toggleOpenOnly()" /> Open positions only</label>
+      <button class="btn sm" (click)="exportCsv()" [disabled]="!detail()"><app-icon name="download" [size]="12" /> Export CSV</button>
+      <button class="btn sm" (click)="sub.set('autoclose')"><app-icon name="history" [size]="12" /> MIS Auto-Exit Monitor</button>
+      <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh 15s</label>
+    </div>
+  }
+</section>
+
+<div class="subtabs">
+  <button [class.active]="sub() === 'tracking'" (click)="sub.set('tracking')"><app-icon name="pin" [size]="13" class="r" /> Position Tracking</button>
+  <button [class.active]="sub() === 'inflight'" (click)="sub.set('inflight')"><i class="rdot"></i> In-Flight Exits
+    @if (summary()?.inFlightExits) { <span class="cnt">{{ summary()!.inFlightExits }}</span> }</button>
+  <button [class.active]="sub() === 'cleanup'" (click)="sub.set('cleanup')"><app-icon name="wrench" [size]="13" class="o" /> Needs Cleanup
+    @if (summary()?.needsCleanup) { <span class="cnt">{{ summary()!.needsCleanup }}</span> }</button>
+  <button [class.active]="sub() === 'hedges'" (click)="sub.set('hedges')"><app-icon name="shield" [size]="13" /> Hedges</button>
+  <button [class.active]="sub() === 'autoclose'" (click)="sub.set('autoclose')"><app-icon name="list" [size]="13" /> Auto-Close Log</button>
+</div>
+
+@switch (sub()) {
+  @case ('tracking') {
+    <div class="split">
+      <!-- ============ left: broker accounts ============ -->
+      <section class="card accounts">
+        <header>
+          <h3>Broker Accounts <small>{{ accounts().length }} loaded</small></h3>
+          <select class="bare" [ngModel]="sort()" (ngModelChange)="sort.set($event)">
+            <option value="client">Client</option><option value="open">Open positions</option><option value="broker">Broker</option>
+          </select>
+          <button class="icon" (click)="sortAsc.set(!sortAsc())" [title]="sortAsc() ? 'Ascending' : 'Descending'">{{ sortAsc() ? '▲' : '▼' }}</button>
+        </header>
+        <div class="alist">
+          @for (a of sortedAccounts(); track a.clientId) {
+            <button class="acct" [class.sel]="a.clientId === selectedId()" (click)="select(a.clientId)">
+              <span class="num">1</span>
+              <div class="who">
+                <strong>{{ a.clientId }}</strong>
+                <div><span class="pill green">{{ a.status }}</span> <span class="muted">{{ a.broker }} · #{{ a.accountId }}</span></div>
+              </div>
+              <div class="cnts">
+                <span><b class="mono">{{ a.openPositions }}</b> open</span>
+                <small>{{ a.closedToday }} closed today</small>
+              </div>
+            </button>
+          } @empty { <div class="empty">No accounts match.</div> }
+        </div>
+      </section>
+
+      <!-- ============ right: account detail ============ -->
+      <section class="card detail">
+        @if (detail(); as d) {
+          <header>
+            <h3><app-icon name="pin" [size]="14" class="r" /> {{ d.account.clientId }} <small>#{{ d.account.accountId }} · {{ d.account.broker }}</small></h3>
+            <button class="btn sm"><app-icon name="bar-chart" [size]="12" /> Event Tracking</button>
+          </header>
+
+          <div class="dfilter">
+            <label><span class="label-caps">Status</span>
+              <select class="input" [(ngModel)]="df.status"><option>All</option><option>Open</option><option>Closed</option><option>Risk</option></select></label>
+            <label><span class="label-caps">Symbol</span><input class="input" placeholder="e.g. NIFTY" [(ngModel)]="df.symbol" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Strategy ID</span><input class="input" [(ngModel)]="df.strategyId" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Exchange</span><input class="input" placeholder="NFO/MCX" [(ngModel)]="df.exchange" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Product</span><input class="input" placeholder="I / D" [(ngModel)]="df.product" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Entry Signal</span><input class="input mono" [(ngModel)]="df.entrySignal" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Exit Signal</span><input class="input mono" [(ngModel)]="df.exitSignal" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Correlation</span><input class="input mono" [(ngModel)]="df.correlation" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Token</span><input class="input mono" [(ngModel)]="df.token" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">Order Tag</span><input class="input mono" [(ngModel)]="df.orderTag" (keyup.enter)="applyDetail()" /></label>
+            <label><span class="label-caps">From</span><input class="input" type="date" [(ngModel)]="df.from" /></label>
+            <label><span class="label-caps">To</span><input class="input" type="date" [(ngModel)]="df.to" /></label>
+            <div class="dactions">
+              <button class="btn sm" (click)="applyDetail()">Apply</button>
+              <button class="link" (click)="detailToday()">Today</button>
+              <button class="link" (click)="detailLast7()">Last 7d</button>
+              <button class="link" (click)="clearDetail()">Clear</button>
+              <button class="link" (click)="saveDetailPreset()" title="Save filter"><app-icon name="save" [size]="13" class="p" /></button>
+              <button class="link" (click)="loadDetailPreset()" title="Load filter"><app-icon name="folder" [size]="13" class="a" /></button>
+            </div>
+          </div>
+
+          <div class="dtabs">
+            <button [class.active]="detailTab() === 'positions'" (click)="detailTab.set('positions')">Positions <b>{{ positions().length }}</b></button>
+            <button [class.active]="detailTab() === 'orders'" (click)="detailTab.set('orders')">Order History <b>{{ d.orders.length }}</b></button>
+          </div>
+
+          <div class="table-wrap">
+            @if (detailTab() === 'positions') {
+              <table>
+                <thead><tr>
+                  <th>Side</th><th>Exch</th><th>Symbol</th><th class="n">Buy Qty</th><th class="n">Sell Qty</th><th class="n">Net Qty</th>
+                  <th class="n">Avg Buy</th><th class="n">Avg Sell</th><th class="n">Realized</th><th class="n">Unrealized</th>
+                  <th>Flags</th><th>Signal Trace</th><th></th>
+                </tr></thead>
+                <tbody>
+                  @for (p of positions(); track p.id) {
+                    <tr (click)="expanded.set(expanded() === p.id ? null : p.id)" [class.open]="expanded() === p.id">
+                      <td><span class="pill" [class.green]="p.side === 'BUY'" [class.red]="p.side === 'SELL'" [class.gray]="p.side === 'FLAT'">{{ p.side }}</span></td>
+                      <td>{{ p.exchange }}</td>
+                      <td class="sym">
+                        <a class="mono">{{ expanded() === p.id ? '▾' : '▸' }} {{ p.symbol }}</a>
+                        <small>{{ p.strategyId }}</small>
+                        <small>created {{ p.createdAt | date: 'M/d/yy, h:mm a' }}</small>
+                      </td>
+                      <td class="n">{{ p.buyQty }}</td><td class="n">{{ p.sellQty }}</td><td class="n">{{ p.netQty }}</td>
+                      <td class="n">{{ p.avgBuy | number: '1.2-2' }}</td><td class="n">{{ p.avgSell | number: '1.2-2' }}</td>
+                      <td class="n" [class]="pnlClass(p.realized)">₹{{ p.realized | number: '1.0-0' }}</td>
+                      <td class="n" [class]="pnlClass(p.unrealized)">₹{{ p.unrealized | number: '1.0-0' }}</td>
+                      <td>
+                        <span class="pill" [class.blue]="p.status === 'OPEN'" [class.green]="p.status === 'CLOSED'" [class.orange]="p.status === 'RISK'">{{ p.status === 'OPEN' ? 'Open' : p.status === 'CLOSED' ? 'Closed' : 'Risk' }}</span>
+                        @if (p.stale) { <span class="pill amber">stale</span> }
+                      </td>
+                      <td class="trace mono">
+                        <div>Entry: {{ shortId(p.entrySignalId, 18) }}</div>
+                        <div>Corr: {{ shortId(p.correlation, 24) }}</div>
+                        @if (p.latestExitId) { <div>Latest exit: {{ shortId(p.latestExitId, 18) }}</div> }
+                        @if (p.closedAt) { <div>Closed: {{ p.closedAt | date: 'M/d/yy, h:mm a' }}</div> }
+                      </td>
+                      <td>
+                        @if (p.netQty !== 0) {
+                          <button class="btn sm danger" (click)="exitPosition(p, $event)" [disabled]="busy() === p.id">{{ busy() === p.id ? '…' : 'Exit' }}</button>
+                        }
+                      </td>
+                    </tr>
+                    @if (expanded() === p.id) {
+                      <tr class="xrow"><td colspan="13">
+                        <div class="xgrid">
+                          <div><span class="label-caps">Instrument</span><b>{{ p.displaySymbol }}</b></div>
+                          <div><span class="label-caps">Strategy</span><b>{{ p.strategy }} · {{ p.strategyId }}</b></div>
+                          <div><span class="label-caps">Product</span><b>{{ p.product === 'I' ? 'Intraday (MIS)' : 'Carry (NRML)' }}</b></div>
+                          <div><span class="label-caps">LTP</span><b class="mono">{{ p.ltp | number: '1.2-2' }}</b></div>
+                          <div><span class="label-caps">P&amp;L %</span><b class="mono" [class]="pnlClass(p.pnlPct)">{{ p.pnlPct === null ? '—' : (p.pnlPct | number: '1.2-2') + '%' }}</b></div>
+                          <div><span class="label-caps">Token</span><b class="mono">{{ p.token }}</b></div>
+                          <div><span class="label-caps">Order Tag</span><b class="mono">{{ p.orderTag }}</b></div>
+                          <div class="wide"><span class="label-caps">Correlation</span><b class="mono">{{ p.correlation }}</b></div>
+                          <div class="wide"><span class="label-caps">Entry Signal</span><b class="mono">{{ p.entrySignalId }}</b></div>
+                        </div>
+                      </td></tr>
+                    }
+                  } @empty { <tr><td colspan="13" class="empty">No positions match these filters.</td></tr> }
+                </tbody>
+              </table>
+            } @else {
+              <table>
+                <thead><tr><th>Time</th><th>Order ID</th><th>Symbol</th><th>Side</th><th>Kind</th><th class="n">Qty</th><th class="n">Filled</th><th class="n">Price</th><th>Status</th><th>Correlation</th><th>Message</th></tr></thead>
+                <tbody>
+                  @for (o of d.orders; track o.orderId + o.time) {
+                    <tr>
+                      <td class="mono">{{ o.time | date: 'HH:mm:ss' }}</td><td class="mono tiny">{{ o.orderId }}</td><td class="mono">{{ o.symbol }}</td>
+                      <td><span class="pill" [class.green]="o.side === 'BUY'" [class.red]="o.side === 'SELL'">{{ o.side }}</span></td>
+                      <td>{{ o.kind }}</td><td class="n">{{ o.qty }}</td><td class="n">{{ o.filledQty }}</td><td class="n">{{ o.price | number: '1.2-2' }}</td>
+                      <td><span class="pill dot" [class.green]="o.status === 'COMPLETED'" [class.red]="o.status === 'REJECTED'">{{ o.status }}</span></td>
+                      <td class="mono tiny">{{ shortId(o.correlation, 28) }}</td><td class="muted">{{ o.message ?? '—' }}</td>
+                    </tr>
+                  } @empty { <tr><td colspan="11" class="empty">No orders.</td></tr> }
+                </tbody>
+              </table>
+            }
+          </div>
+        } @else {
+          <div class="empty big">Select a broker account on the left.</div>
+        }
+      </section>
+    </div>
+  }
+
+  @case ('inflight') {
+    <section class="card plain">
+      <header><h3>In-Flight Exits <small>exit orders sent but not yet confirmed flat</small></h3></header>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Since</th><th>Client</th><th>Broker · Account</th><th>Symbol</th><th class="n">Qty</th><th>Stage</th><th class="n">Attempts</th><th>Reason</th><th>Correlation</th></tr></thead>
+        <tbody>
+          @for (x of inflight(); track x.id) {
+            <tr>
+              <td class="mono">{{ x.since | date: 'HH:mm:ss' }}</td><td><b>{{ x.clientId }}</b></td><td>{{ x.broker }} · #{{ x.accountId }}</td>
+              <td class="mono">{{ x.symbol }}</td><td class="n">{{ x.qty }}</td>
+              <td><span class="pill dot" [class.amber]="x.stage === 'QUEUED'" [class.blue]="x.stage === 'SENT'" [class.orange]="x.stage === 'PARTIAL'" [class.red]="x.stage === 'RETRYING'">{{ x.stage }}</span></td>
+              <td class="n">{{ x.attempts }}</td><td>{{ x.reason }}</td><td class="mono tiny">{{ shortId(x.correlation, 30) }}</td>
+            </tr>
+          } @empty { <tr><td colspan="9" class="empty">No exits in flight.</td></tr> }
+        </tbody>
+      </table></div>
+    </section>
+  }
+
+  @case ('cleanup') {
+    <section class="card plain">
+      <header><h3>Needs Cleanup <small>OMS and broker disagree, or a position is orphaned/stale</small></h3></header>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Since</th><th>Client</th><th>Broker · Account</th><th>Symbol</th><th>Issue</th><th class="n">OMS Qty</th><th class="n">Broker Qty</th><th class="n">Diff</th></tr></thead>
+        <tbody>
+          @for (c of cleanup(); track $index) {
+            <tr>
+              <td class="mono">{{ c.since | date: 'HH:mm' }}</td><td><b>{{ c.clientId }}</b></td><td>{{ c.broker }} · #{{ c.accountId }}</td>
+              <td class="mono">{{ c.symbol }}</td><td><span class="pill orange">{{ c.issue }}</span></td>
+              <td class="n">{{ c.omsQty }}</td><td class="n">{{ c.brokerQty }}</td>
+              <td class="n" [class.neg]="c.omsQty !== c.brokerQty">{{ c.brokerQty - c.omsQty }}</td>
+            </tr>
+          } @empty { <tr><td colspan="8" class="empty">Nothing to clean up.</td></tr> }
+        </tbody>
+      </table></div>
+    </section>
+  }
+
+  @case ('hedges') {
+    <section class="card plain">
+      <header><h3>Hedges <small>premium CE/PE protection on short positions</small></h3></header>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Client</th><th>Broker · Account</th><th>Short Leg</th><th class="n">Qty</th><th>CE Hedge</th><th class="n">CE Qty</th><th>PE Hedge</th><th class="n">PE Qty</th><th>Status</th></tr></thead>
+        <tbody>
+          @for (h of hedges(); track $index) {
+            <tr>
+              <td><b>{{ h.clientId }}</b></td><td>{{ h.broker }} · #{{ h.accountId }}</td>
+              <td class="mono">{{ h.mainSymbol }}</td><td class="n">{{ h.mainQty }}</td>
+              <td class="mono">{{ h.ceLeg }}</td><td class="n">{{ h.ceQty }}</td><td class="mono">{{ h.peLeg }}</td><td class="n">{{ h.peQty }}</td>
+              <td><span class="pill dot" [class.green]="h.status === 'PROTECTED'" [class.amber]="h.status === 'PARTIAL'" [class.red]="h.status === 'NAKED'">{{ h.status }}</span></td>
+            </tr>
+          } @empty { <tr><td colspan="9" class="empty">No hedged positions.</td></tr> }
+        </tbody>
+      </table></div>
+    </section>
+  }
+
+  @case ('autoclose') {
+    <section class="card plain">
+      <header><h3>Auto-Close Log <small>MIS square-off and rule-based exits</small></h3></header>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Time</th><th>Client</th><th>Broker · Account</th><th>Symbol</th><th class="n">Qty</th><th>Rule</th><th>Result</th><th>Message</th></tr></thead>
+        <tbody>
+          @for (e of autoClose(); track $index) {
+            <tr>
+              <td class="mono">{{ e.time | date: 'HH:mm:ss' }}</td><td><b>{{ e.clientId }}</b></td><td>{{ e.broker }} · #{{ e.accountId }}</td>
+              <td class="mono">{{ e.symbol }}</td><td class="n">{{ e.qty }}</td><td>{{ e.rule }}</td>
+              <td><span class="pill dot" [class.green]="e.result === 'SUCCESS'" [class.red]="e.result !== 'SUCCESS'">{{ e.result }}</span></td>
+              <td class="muted">{{ e.message }}</td>
+            </tr>
+          } @empty { <tr><td colspan="8" class="empty">No auto-close events.</td></tr> }
+        </tbody>
+      </table></div>
+    </section>
+  }
+}
