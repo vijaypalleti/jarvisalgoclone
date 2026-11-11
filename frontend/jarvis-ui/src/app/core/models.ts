@@ -51,9 +51,24 @@ export interface SignalListItem {
   exitStatus: string; errors: number; requested: number; filled: number; exited: number;
   rejectedOrUnfilled: number; hedge: HedgeRollup | null; openAccounts: number;
   closedAccounts: number; totalAccounts: number; correlationId: string;
+  /** status/exitStatus above are the EFFECTIVE values (worst account wins); this is what the OMS recorded */
+  recordedExitStatus: string;
+  exitCorrelationId: string | null;
+  health: 'ok' | 'open' | 'error' | 'residual';
+  needsAttention: boolean;
+  residualQty: number; residualAccounts: number; anomalyCount: number;
+  chunksDone: number; chunksTotal: number; openQty: number;
+  /** rejected/failed/partial accounts + contradictions still needing action (recovered retries excluded) */
+  unresolvedIssues: number;
 }
 
-export interface SignalListResponse { total: number; openEntrySignals: number; items: SignalListItem[]; }
+export interface SignalListResponse { total: number; openEntrySignals: number; attentionCount: number; items: SignalListItem[]; }
+
+export interface ChunkOrder {
+  index: number; taskStatus: string; brokerStatus: string; req: number; fill: number; unfilled: number;
+  attempts: number; modify: number | null; brokerOrder: string | null; reason: string | null;
+}
+export interface AttentionItem { clientId: string; broker: string; brokerAccount: string; issue: string; qty: number; }
 
 export interface ShortOrderLeg {
   label: string; status: string; req: number; fill: number; unfilled: number; attempts: number;
@@ -71,10 +86,14 @@ export interface SignalAccountExecution {
   rejected: number; cancelled: number; exit: number; netOpen: number; avgEntry: number;
   avgExit: number | null; retry: number; modify: number | null; rejectReason: string | null;
   attempt: number | null; hedge: HedgeDetail | null;
+  chunkOrders: ChunkOrder[]; partialReason: string | null; anomalies: string[]; severity: number;
 }
 
 export interface SignalDetailResponse {
-  signal: SignalListItem; success: number; failed: number; pending: number; open: number; closed: number;
+  signal: SignalListItem; success: number; partial: number; failed: number; pending: number;
+  openAccounts: number; openQty: number; closed: number;
+  statusCounts: { status: string; count: number }[];
+  attention: AttentionItem[];
   accounts: PagedResult<SignalAccountExecution>; brokers: string[];
 }
 

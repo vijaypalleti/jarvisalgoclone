@@ -1,4 +1,7 @@
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
@@ -28,13 +31,14 @@ public class FyersClient(HttpClient http, IConfiguration config, IMemoryCache ca
     }
 
     /// <summary>Token expiry read from the JWT "exp" claim (no signature validation; display only).</summary>
-    public DateTimeOffset? TokenExpiry
+    public DateTimeOffset? TokenExpiry => JwtExpiry(Token);
+
+    public static DateTimeOffset? JwtExpiry(string? token)
     {
-        get
         {
             try
             {
-                var parts = Token?.Split('.');
+                var parts = token?.Split('.');
                 if (parts is not { Length: 3 }) return null;
                 var payload = parts[1].Replace('-', '+').Replace('_', '/');
                 payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
@@ -43,6 +47,40 @@ public class FyersClient(HttpClient http, IConfiguration config, IMemoryCache ca
             }
             catch { return null; }
         }
+    }
+
+    // ------------------------------------------------------------------ login (auth code → access token)
+    // These are the only POSTs, and they go to Fyers' auth endpoints, never to order APIs.
+
+    /// <summary>SHA-256 of "appId:secret" (hex), which Fyers v3 calls appIdHash.</summary>
+    public static string AppIdHash(string clientId, string secret) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes($"{clientId}:{secret}"))).ToLowerInvariant();
+
+    /// <summary>Login page URL; Fyers redirects back to <paramref name="redirectUri"/> with ?auth_code=…&amp;state=….</summary>
+    public string AuthCodeUrl(string clientId, string redirectUri, string state) =>
+        new Uri(http.BaseAddress!, $"api/v3/generate-authcode?client_id={Uri.EscapeDataString(clientId)}" +
+            $"&redirect_uri={Uri.EscapeDataString(redirectUri)}&response_type=code&state={Uri.EscapeDataString(state)}").ToString();
+
+    public Task<FyersTokenResponse> ValidateAuthCode(string clientId, string secret, string authCode) =>
+        PostAuth("api/v3/validate-authcode", new { grant_type = "authorization_code", appIdHash = AppIdHash(clientId, secret), code = authCode });
+
+    /// <summary>Daily renewal without a browser login: refresh token (valid ~15 days) + the account PIN.</summary>
+    public Task<FyersTokenResponse> ValidateRefreshToken(string clientId, string secret, string refreshToken, string pin) =>
+        PostAuth("api/v3/validate-refresh-token", new { grant_type = "refresh_token", appIdHash = AppIdHash(clientId, secret), refresh_token = refreshToken, pin });
+
+    private async Task<FyersTokenResponse> PostAuth(string path, object body)
+    {
+        using var res = await http.PostAsJsonAsync(path, body);
+        var text = await res.Content.ReadAsStringAsync();
+        FyersTokenResponse? r;
+        try { r = JsonSerializer.Deserialize<FyersTokenResponse>(text, JsonOpts); }
+        catch (JsonException) { throw new FyersException($"Unexpected Fyers response ({(int)res.StatusCode}).", 502); }
+        if (r is null || r.S != "ok" || string.IsNullOrEmpty(r.AccessToken))
+        {
+            log.LogWarning("Fyers {Path} failed: {Code} {Message}", path, r?.Code, r?.Message);
+            throw new FyersException(r?.Message ?? $"HTTP {(int)res.StatusCode}", 400);
+        }
+        return r;
     }
 
     public Task<FyersProfile> Profile() => Get<FyersProfile>("api/v3/profile", TimeSpan.FromMinutes(5));
@@ -84,6 +122,12 @@ public class FyersClient(HttpClient http, IConfiguration config, IMemoryCache ca
     }
 
     private static readonly JsonSerializerOptions JsonOpts = new() { PropertyNameCaseInsensitive = true, NumberHandling = JsonNumberHandling.AllowReadingFromString };
+}
+
+public class FyersTokenResponse : FyersEnvelope
+{
+    [JsonPropertyName("access_token")] public string? AccessToken { get; set; }
+    [JsonPropertyName("refresh_token")] public string? RefreshToken { get; set; }
 }
 
 public class FyersException(string message, int status) : Exception(message)

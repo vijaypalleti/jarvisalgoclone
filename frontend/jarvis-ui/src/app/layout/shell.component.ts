@@ -30,6 +30,7 @@ export class ShellComponent {
     { label: 'Broker A/c', icon: 'users', path: '/admin/broker-accounts' },
     { label: 'Broker Live (Fyers)', icon: 'radio', path: '/admin/broker-live' },
     { label: 'Crypto Live (Delta)', icon: 'coin', path: '/admin/crypto-live' },
+    { label: 'Realtime Data', icon: 'database', path: '/admin/realtime' },
     { label: 'System Users', icon: 'users-round', path: '/admin/system-users' },
     { label: 'Subscription', icon: 'gem', path: '/admin/subscription' },
     { label: 'Announcement', icon: 'megaphone', path: '/admin/announcement' },

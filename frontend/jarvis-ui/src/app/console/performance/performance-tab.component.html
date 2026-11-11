@@ -23,9 +23,8 @@
           <option value="">All Baskets</option>@for (b of baskets(); track b) { <option [value]="b">{{ b }}</option> }
         </select><span class="cnt">{{ baskets().length }}</span></span></label>
       <label><span class="label-caps">Strategy</span>
-        <span class="sel"><select class="input" [ngModel]="strategy()" (ngModelChange)="strategy.set($event)">
-          <option value="">All Strategies</option>@for (s of strategies(); track s) { <option [value]="s">{{ s }}</option> }
-        </select><span class="cnt">{{ strategies().length }}</span></span></label>
+        <app-multi-select [options]="strategyOptions()" [selected]="strategySel()" noun="strategies" allLabel="All Strategies"
+                          (applied)="strategySel.set($event)" /></label>
       <label><span class="label-caps">Date Range</span>
         <span class="dates">
           <input class="input" type="date" [ngModel]="from()" (ngModelChange)="from.set($event); range.set('custom')" />
@@ -45,7 +44,7 @@
   <div class="kpis">
     <div class="card kpi">
       <div class="kh"><span class="label-caps">Strategy P&amp;L (OMS) ⓘ</span><span class="kico orange"><app-icon name="bar-chart" [size]="14" /></span></div>
-      <div class="kv"><b class="mono" [class]="pnlClass(d.strategyPnl)">₹{{ d.strategyPnl | number: '1.0-0' }}</b><span class="tag">This page</span></div>
+      <div class="kv"><b class="mono" [class]="pnlClass(d.strategyPnl)" [appTick]="d.strategyPnl">₹{{ d.strategyPnl | number: '1.0-0' }}</b><span class="tag">This page</span></div>
       <small>{{ d.accountsOnPage }} accounts on this page · {{ d.accountsInScope }} in scope</small>
     </div>
     <div class="card kpi">
@@ -103,8 +102,8 @@
               @if (u.tokenStale) { <span class="pill orange">token stale</span> } @else { <span class="pill gray">{{ u.strategies }} strategies</span> }
             </div>
             <div class="upnl" [title]="'Strategy P&L · ' + (strategy() || 'All strategies') + ' · ' + (basket() || 'All baskets')">
-              <b class="mono" [class]="pnlClass(u.strategyPnl)">₹{{ u.strategyPnl | number: '1.0-0' }}</b>
-              <small class="mono">R <span [class]="pnlClass(u.realized)">₹{{ u.realized | number: '1.0-0' }}</span> · U <span [class]="pnlClass(u.unrealized)">₹{{ u.unrealized | number: '1.0-0' }}</span> · 2m old</small>
+              <b class="mono" [class]="pnlClass(u.strategyPnl)" [appTick]="u.strategyPnl">₹{{ u.strategyPnl | number: '1.0-0' }}</b>
+              <small class="mono">R <span [class]="pnlClass(u.realized)">₹{{ u.realized | number: '1.0-0' }}</span> · U <span [class]="pnlClass(u.unrealized)">₹{{ u.unrealized | number: '1.0-0' }}</span></small>
               @if (u.excludedStrategies) { <small class="warn">⚠ {{ u.excludedStrategies }} excluded</small> }
             </div>
             <button class="more" (click)="$event.stopPropagation()">⋮</button>
@@ -127,7 +126,7 @@
 
       <div class="pnlcard">
         <span class="label-caps">Strategy P&amp;L · {{ strategy() || 'All strategies' }}</span> <span class="tag">OMS ledger · server</span>
-        <b class="big mono" [class]="pnlClass(d.total)">₹{{ d.total | number: '1.0-0' }}</b>
+        <b class="big mono" [class]="pnlClass(d.total)" [appTick]="d.total">₹{{ d.total | number: '1.0-0' }}</b>
         <small class="mono">R <b [class]="pnlClass(d.realized)">₹{{ d.realized | number: '1.0-0' }}</b> · U <b [class]="pnlClass(d.unrealized)">₹{{ d.unrealized | number: '1.0-0' }}</b>
           · {{ d.closed }} closed · {{ d.open }} open · {{ d.wins }}W/{{ d.losses }}L</small>
         <small class="muted">marked {{ d.markedAt | date: 'HH:mm' }}</small>
@@ -147,9 +146,9 @@
                   <td>{{ p.product }}</td>
                   <td class="n">{{ p.netQty < 0 ? -p.netQty : p.netQty }}</td>
                   <td class="n">{{ (p.entrySide === 'SELL' ? p.avgSell : p.avgBuy) | number: '1.2-2' }}</td>
-                  <td class="n">{{ p.ltp | number: '1.2-2' }}</td>
+                  <td class="n" [appTick]="p.ltp">{{ p.ltp | number: '1.2-2' }}</td>
                   <td class="n" [class]="pnlClass(p.realized)">₹{{ p.realized | number: '1.2-2' }}</td>
-                  <td class="n" [class]="pnlClass(p.unrealized)">₹{{ p.unrealized | number: '1.2-2' }}</td>
+                  <td class="n" [class]="pnlClass(p.unrealized)" [appTick]="p.unrealized">₹{{ p.unrealized | number: '1.2-2' }}</td>
                   <td class="n" [class]="pnlClass(p.pnlPct)">{{ p.pnlPct === null ? '—' : (p.pnlPct | number: '1.2-2') + '%' }}</td>
                   <td class="mono">{{ d.account.accountId }}</td>
                   <td><span class="pill" [class.cyan]="p.status === 'OPEN'" [class.green]="p.status === 'CLOSED'" [class.orange]="p.status === 'RISK'">{{ p.status }}</span></td>

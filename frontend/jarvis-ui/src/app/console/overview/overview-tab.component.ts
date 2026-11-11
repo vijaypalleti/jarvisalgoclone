@@ -1,5 +1,6 @@
 import {
-  AfterViewInit, Component, ElementRef, OnDestroy, QueryList, ViewChild, ViewChildren, computed, effect, inject, signal
+  AfterViewInit, Component, ElementRef, HostListener, NgZone, OnDestroy, QueryList, ViewChild, ViewChildren, computed, effect,
+  inject, signal
 } from '@angular/core';
 import { DatePipe, DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import { Router } from '@angular/router';
@@ -44,6 +45,8 @@ export class OverviewTabComponent implements AfterViewInit, OnDestroy {
 
   @ViewChild('hub') hubEl!: ElementRef<HTMLElement>;
   @ViewChild('core') coreEl!: ElementRef<HTMLElement>;
+  @ViewChild('links') linksEl?: ElementRef<SVGSVGElement>;
+  private zone = inject(NgZone);
   @ViewChildren('cardEl') cardEls!: QueryList<ElementRef<HTMLElement>>;
 
   connectors = signal<Connector[]>([]);
@@ -143,7 +146,27 @@ export class OverviewTabComponent implements AfterViewInit, OnDestroy {
     this.timers.push(setTimeout(() => this.flashing.update(s => new Set([...s].filter(k => !changed.includes(k)))), 700));
   });
 
+  /**
+   * Browser zoom (Ctrl +/−) changes the CSS-pixel layout. Several independent triggers make sure the rails are
+   * re-drawn after it: ResizeObserver (element sizes), window resize (fires on every zoom step), devicePixelRatio
+   * change (zoom changes DPR), visualViewport resize, and every overview refresh as a safety net.
+   */
+  @HostListener('window:resize') onWindowResize() { this.scheduleDraw(); }
+
+  private redrawOnData = effect(() => { this.state.overview(); this.left(); this.right(); this.scheduleDraw(); });
+
+  private dprQuery?: MediaQueryList;
+  private onDprChange = () => { this.scheduleDraw(); this.watchDpr(); };
+  private watchDpr() {
+    this.dprQuery?.removeEventListener('change', this.onDprChange);
+    this.dprQuery = matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+    this.dprQuery.addEventListener('change', this.onDprChange);
+  }
+  private onViewport = () => this.scheduleDraw();
+
   ngAfterViewInit() {
+    this.watchDpr();
+    window.visualViewport?.addEventListener('resize', this.onViewport);
     // Re-measure whenever the hub, the core or any tile changes size (window resize, data arriving, fonts).
     this.ro = new ResizeObserver(() => this.scheduleDraw());
     this.ro.observe(this.hubEl.nativeElement);
@@ -156,7 +179,11 @@ export class OverviewTabComponent implements AfterViewInit, OnDestroy {
     this.timers.push(setTimeout(() => this.scheduleDraw(), 1200));
   }
 
-  ngOnDestroy() { this.ro?.disconnect(); cancelAnimationFrame(this.rafId); this.timers.forEach(clearTimeout); }
+  ngOnDestroy() {
+    this.ro?.disconnect(); cancelAnimationFrame(this.rafId); this.timers.forEach(clearTimeout);
+    this.dprQuery?.removeEventListener('change', this.onDprChange);
+    window.visualViewport?.removeEventListener('resize', this.onViewport);
+  }
 
   /** Coalesce bursts of resize callbacks into one measurement per frame. */
   private scheduleDraw() {
@@ -173,6 +200,9 @@ export class OverviewTabComponent implements AfterViewInit, OnDestroy {
     const core = this.coreEl?.nativeElement;
     if (!hub || !core) return;
     const h = hub.getBoundingClientRect();
+    // measure relative to the SVG's own origin (that is the space the paths are drawn in)
+    const svgBox = this.linksEl?.nativeElement.getBoundingClientRect();
+    const o = { left: svgBox?.left ?? h.left, top: svgBox?.top ?? h.top };
     const c = core.getBoundingClientRect();
     const nLeft = this.left().length;
     const cards = [...this.left(), ...this.right()];
@@ -183,10 +213,10 @@ export class OverviewTabComponent implements AfterViewInit, OnDestroy {
       const r = ref.nativeElement.getBoundingClientRect();
       const isLeft = i < nLeft;
       const k = isLeft ? i : i - nLeft;
-      const x1 = (isLeft ? c.left : c.right) - h.left;
-      const y1 = c.top - h.top + c.height * (ports[k] ?? 0.5);
-      const x2 = (isLeft ? r.right : r.left) - h.left;
-      const y2 = r.top + r.height / 2 - h.top;
+      const x1 = (isLeft ? c.left : c.right) - o.left;
+      const y1 = c.top - o.top + c.height * (ports[k] ?? 0.5);
+      const x2 = (isLeft ? r.right : r.left) - o.left;
+      const y2 = r.top + r.height / 2 - o.top;
       const midX = (x1 + x2) / 2;
       const f = (n: number) => n.toFixed(1);
       return {
@@ -196,9 +226,12 @@ export class OverviewTabComponent implements AfterViewInit, OnDestroy {
         begin: +(i * 0.25).toFixed(2),
       };
     });
-    this.svgRef.set(location.href.split('#')[0]);
-    this.svgSize.set({ w: h.width, h: h.height });
-    this.connectors.set(lines);
+    // ResizeObserver / matchMedia callbacks run outside Angular's zone → apply inside it so the view always repaints
+    this.zone.run(() => {
+      this.svgRef.set(location.href.split('#')[0]);
+      this.svgSize.set({ w: h.width, h: h.height });
+      this.connectors.set(lines);
+    });
   }
 
   loadSubs(page: number) {

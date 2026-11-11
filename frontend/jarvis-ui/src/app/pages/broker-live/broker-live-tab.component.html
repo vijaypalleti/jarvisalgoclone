@@ -24,8 +24,48 @@
   </div>
   <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh 5s</label>
   <button class="btn sm" (click)="load()" [disabled]="loading()"><app-icon name="refresh" [size]="12" /> Refresh</button>
-  <button class="btn sm" (click)="showToken.set(!showToken())"><app-icon name="key" [size]="12" /> Update token</button>
+  <button class="btn primary sm" (click)="login()" [disabled]="authBusy()"><app-icon name="zap" [size]="12" /> Login with Fyers</button>
+  <button class="btn sm" (click)="showToken.set(!showToken())" title="Paste an access token manually"><app-icon name="key" [size]="12" /> Token</button>
 </section>
+
+@if (!status()?.connected && auth()?.saved?.canRenewWithPin && !loginOpen()) {
+  <section class="card login renew">
+    <div class="lt"><b>Renew today's session with your PIN</b>
+      <span class="muted">No browser login needed. Uses the saved refresh token
+        (valid until {{ auth()!.saved!.refreshExpiresAt ? (auth()!.saved!.refreshExpiresAt | date: 'dd MMM') : '~15 days' }}).</span></div>
+    <div class="row">
+      <input class="input mono pin" type="password" inputmode="numeric" maxlength="6" placeholder="PIN" [(ngModel)]="pin" (keyup.enter)="renew()" autocomplete="off" />
+      <button class="btn primary sm" (click)="renew()" [disabled]="authBusy() || !pin">Renew</button>
+    </div>
+    @if (authMsg(); as m) { <div class="amsg" [class.ok]="m.ok">{{ m.ok ? '✓' : '✕' }} {{ m.text }}</div> }
+  </section>
+}
+
+@if (loginOpen()) {
+  <section class="card login">
+    <div class="lt">
+      <b>Fyers login</b>
+      @if (auth(); as a) { <span class="muted">app <span class="mono">{{ a.appId }}</span> · redirect <span class="mono">{{ a.redirectUri }}</span></span> }
+      <button class="x" (click)="loginOpen.set(false)" title="Close">✕</button>
+    </div>
+    @if (!awaitingPaste()) {
+      <p class="steps">A Fyers window opened. Log in there; it closes by itself and this page turns <b>LIVE</b>.
+        @if (lastLoginUrl) { <a [href]="lastLoginUrl" target="fyersLogin">Window didn't open?</a> }
+        · <button class="lnk" (click)="awaitingPaste.set(true)">Paste URL instead</button></p>
+    } @else {
+      <p class="steps">After logging in, Fyers shows its redirect page. <b>Copy that page's full URL</b> (or just the auth_code) and paste it here:</p>
+      <div class="row">
+        <input class="input mono grow" placeholder="https://…?s=ok&code=200&auth_code=eyJ…&state=…" [(ngModel)]="pasteInput" (keyup.enter)="submitPaste()" />
+        <button class="btn primary sm" (click)="submitPaste()" [disabled]="authBusy() || !pasteInput.trim()">Generate session</button>
+      </div>
+      @if (auth() && !auth()!.oneClick) {
+        <p class="hint">For true one-click login, set your Fyers app's redirect URL (myapi.fyers.in → your app) to
+          <code>http://127.0.0.1:5186/api/fyers/auth/callback</code> and put the same value in <code>Fyers:RedirectUri</code>.</p>
+      }
+    }
+    @if (authMsg(); as m) { <div class="amsg" [class.ok]="m.ok">{{ m.ok ? '✓' : '✕' }} {{ m.text }}</div> }
+  </section>
+}
 
 @if (showToken()) {
   <section class="card token">

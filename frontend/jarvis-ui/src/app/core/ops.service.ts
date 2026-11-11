@@ -37,10 +37,13 @@ export class OpsService {
   autoClose() { return this.http.get<AutoCloseEntry[]>(`${BASE}/positions/auto-close`); }
 
   // Performance
-  performance(q: { basket?: string; partnerId?: string; name?: string; broker?: string; sort?: string }) {
+  /** strategies: comma-separated names; P&L / positions are then computed from those strategies only */
+  performance(q: { basket?: string; partnerId?: string; name?: string; broker?: string; sort?: string; strategies?: string }) {
     return this.http.get<PerformanceSummary>(`${BASE}/performance/summary`, { params: params(q) });
   }
-  userPerformance(clientId: string) { return this.http.get<UserPerformanceDetail>(`${BASE}/performance/users/${encodeURIComponent(clientId)}`); }
+  userPerformance(clientId: string, strategies?: string) {
+    return this.http.get<UserPerformanceDetail>(`${BASE}/performance/users/${encodeURIComponent(clientId)}`, { params: params({ strategies }) });
+  }
 
   // Infrastructure
   containers() { return this.http.get<ContainerSummary>(`${BASE}/infrastructure/containers`); }

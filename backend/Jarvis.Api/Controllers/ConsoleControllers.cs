@@ -156,7 +156,7 @@ public class BrokerSessionsController(MockDataStore store) : ControllerBase
 [Route("api/console/signals")]
 public class SignalsController(MockDataStore store) : ControllerBase
 {
-    /// <param name="filter">all | entry | exit | exit-pending | exit-completed | partial-exit | chunked</param>
+    /// <param name="filter">all | attention | entry | exit | exit-pending | exit-completed | partial-exit | chunked</param>
     [HttpGet]
     public SignalListResponse List(
         [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] string? symbol,
@@ -173,16 +173,19 @@ public class SignalsController(MockDataStore store) : ControllerBase
             if (!string.IsNullOrWhiteSpace(correlationId)) q = q.Where(s => s.CorrelationId.Contains(correlationId, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(client)) q = q.Where(s => s.Accounts.Any(a => a.ClientId == client || a.BrokerAccount.Contains(client, StringComparison.OrdinalIgnoreCase)));
             if (!string.IsNullOrWhiteSpace(basket)) q = q.Where(s => s.Basket == basket);
-            if (!string.IsNullOrWhiteSpace(strategy)) q = q.Where(s => s.StrategyName == strategy);
+            var strat = MockDataStore.ParseStrategies(strategy);   // one or several, comma-separated
+            if (strat is not null) q = q.Where(s => strat.Contains(s.StrategyName));
+            var scoped = q.ToList();   // date/symbol/client/basket scope — quick-filter counts are computed on this
             q = filter switch
             {
-                "entry" => q.Where(s => s.Type == "entry"),
-                "exit" => q.Where(s => s.Type == "exit"),
-                "exit-pending" => q.Where(s => s.ExitStatus == "EXIT PENDING"),
-                "exit-completed" => q.Where(s => s.ExitStatus == "EXIT COMPLETED"),
-                "partial-exit" => q.Where(s => s.Exited > 0 && s.Exited < s.Filled),
-                "chunked" => q.Where(s => s.Chunked),
-                _ => q
+                "attention" => scoped.Where(s => s.NeedsAttention),
+                "entry" => scoped.Where(s => s.Type == "entry"),
+                "exit" => scoped.Where(s => s.Type == "exit"),
+                "exit-pending" => scoped.Where(s => s.EffectiveExitStatus == "EXIT PENDING"),
+                "exit-completed" => scoped.Where(s => s.EffectiveExitStatus == "EXIT COMPLETED"),
+                "partial-exit" => scoped.Where(s => s.ResidualQty > 0 || (s.Exited > 0 && s.Exited < s.Filled)),
+                "chunked" => scoped.Where(s => s.Chunked),
+                _ => scoped
             };
             q = sort switch
             {
@@ -193,22 +196,20 @@ public class SignalsController(MockDataStore store) : ControllerBase
             };
             var list = q.ToList();
             var openEntry = list.Count(s => s.Type == "entry" && s.Status == "Open");
-            return new SignalListResponse(list.Count, openEntry, list.Take(take).Select(MockDataStore.ToListItem).ToList());
+            return new SignalListResponse(list.Count, openEntry, scoped.Count(s => s.NeedsAttention),
+                list.Take(take).Select(MockDataStore.ToListItem).ToList());
         }
     }
 
     [HttpGet("filters")]
-    public object Filters()
+    /// <summary>Full production catalog (Data/Catalog.cs), not just the values that happen to appear in signals.</summary>
+    public object Filters() => new
     {
-        lock (store.SyncRoot)
-        {
-            return new
-            {
-                baskets = store.Signals.Select(s => s.Basket).Distinct().Order().ToList(),
-                strategies = store.Signals.Select(s => s.StrategyName).Distinct().Order().ToList()
-            };
-        }
-    }
+        baskets = Catalog.BasketNames,
+        strategies = Catalog.Strategies.Select(s => s.Name).ToList(),
+        strategyCatalog = Catalog.Strategies.Select(s => new { s.Name, s.Code, s.Basket }),
+        basketCatalog = Catalog.Baskets,
+    };
 
     [HttpGet("{id:long}")]
     public ActionResult<SignalDetailResponse> Detail(
@@ -225,16 +226,30 @@ public class SignalsController(MockDataStore store) : ControllerBase
             if (!string.IsNullOrWhiteSpace(account)) q = q.Where(a => a.BrokerAccount.Contains(account, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(broker)) q = q.Where(a => a.Broker == broker);
             if (!string.IsNullOrWhiteSpace(status)) q = q.Where(a => a.OrderStatus == status);
-            var filtered = q.ToList();
+            // problems first: partial → failed/rejected → pending/anomalies → completed; then by open qty
+            var filtered = q.OrderBy(a => a.Severity).ThenByDescending(a => a.NetOpen).ThenBy(a => a.ClientId, StringComparer.Ordinal).ToList();
 
-            var failed = s.Accounts.Count(a => a.Hedge != null || a.OrderStatus != "COMPLETED");
+            var partial = s.Accounts.Count(a => a.OrderStatus == "PARTIAL");
+            var failed = s.Accounts.Count(a => a.OrderStatus is "REJECTED" or "FAILED");
+            var pending = s.Accounts.Count(a => a.Pending > 0 || a.OrderStatus == "PENDING");
+
+            var attention = s.Accounts
+                .Where(a => a.Severity < 3 || (s.ExitSent && a.NetOpen > 0))
+                .OrderBy(a => a.Severity)
+                .Select(a => new AttentionItem(a.ClientId, a.Broker, a.BrokerAccount,
+                    a.PartialReason ?? a.RejectReason ?? (a.Anomalies.Count > 0 ? a.Anomalies[0] : a.OrderStatus),
+                    s.ExitSent ? a.NetOpen : a.Rejected))
+                .ToList();
+
             return new SignalDetailResponse(
                 MockDataStore.ToListItem(s),
-                Success: s.Accounts.Count - failed,
-                Failed: failed,
-                Pending: s.Accounts.Count(a => a.Pending > 0),
-                Open: s.OpenAccounts,
+                Success: s.Accounts.Count - partial - failed - pending,
+                Partial: partial, Failed: failed, Pending: pending,
+                OpenAccounts: s.OpenAccounts, OpenQty: s.Accounts.Sum(a => a.NetOpen),
                 Closed: s.ClosedAccounts,
+                StatusCounts: s.Accounts.GroupBy(a => a.OrderStatus).Select(g => new StatusCount(g.Key, g.Count()))
+                                .OrderBy(c => c.Status == "COMPLETED").ToList(),
+                Attention: attention,
                 Accounts: new PagedResult<SignalAccountExecution>(
                     filtered.Skip((page - 1) * pageSize).Take(pageSize).ToList(), filtered.Count, page, pageSize),
                 Brokers: s.Accounts.Select(a => a.Broker).Distinct().Order().ToList());
@@ -253,9 +268,37 @@ public class SignalsController(MockDataStore store) : ControllerBase
                 a.Exit = a.Fill;
                 a.AvgExit ??= a.AvgEntry;
             }
+            foreach (var a in s.Accounts) { a.ChunkOrders.ForEach(c => { c.Fill = c.Req; c.BrokerOrder ??= "FORCE-EXIT"; }); if (a.OrderStatus == "PARTIAL") a.OrderStatus = "COMPLETED"; a.PartialReason = null; }
             s.Status = "Closed";
             s.ExitStatus = "EXIT COMPLETED";
+            s.ExitCorrelationId ??= Guid.NewGuid().ToString("N");
             return NoContent();
+        }
+    }
+
+    /// <summary>Square off one account's residual (all unfilled chunks).</summary>
+    [HttpPost("{id:long}/accounts/{clientId}/exit-remaining")]
+    public IActionResult ExitRemaining(long id, string clientId)
+    {
+        lock (store.SyncRoot)
+        {
+            var s = store.Signals.FirstOrDefault(x => x.Id == id);
+            var a = s?.Accounts.FirstOrDefault(x => x.ClientId == clientId);
+            if (s is null || a is null) return NotFound();
+            return store.ExitRemaining(s, a) ? NoContent() : Conflict(new { error = "Nothing open on this account" });
+        }
+    }
+
+    /// <summary>Re-place a single unfilled chunk.</summary>
+    [HttpPost("{id:long}/accounts/{clientId}/chunks/{index:int}/retry")]
+    public IActionResult RetryChunk(long id, string clientId, int index)
+    {
+        lock (store.SyncRoot)
+        {
+            var s = store.Signals.FirstOrDefault(x => x.Id == id);
+            var a = s?.Accounts.FirstOrDefault(x => x.ClientId == clientId);
+            if (s is null || a is null) return NotFound();
+            return store.RetryChunk(s, a, index) ? NoContent() : Conflict(new { error = "Chunk is already filled" });
         }
     }
 }

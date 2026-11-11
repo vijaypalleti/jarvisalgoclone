@@ -19,7 +19,7 @@
       <label class="chk"><input type="checkbox" [checked]="f.openOnly" (change)="toggleOpenOnly()" /> Open positions only</label>
       <button class="btn sm" (click)="exportCsv()" [disabled]="!detail()"><app-icon name="download" [size]="12" /> Export CSV</button>
       <button class="btn sm" (click)="sub.set('autoclose')"><app-icon name="history" [size]="12" /> MIS Auto-Exit Monitor</button>
-      <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh 15s</label>
+      <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh 3s</label>
     </div>
   }
 </section>
@@ -120,8 +120,8 @@
                       </td>
                       <td class="n">{{ p.buyQty }}</td><td class="n">{{ p.sellQty }}</td><td class="n">{{ p.netQty }}</td>
                       <td class="n">{{ p.avgBuy | number: '1.2-2' }}</td><td class="n">{{ p.avgSell | number: '1.2-2' }}</td>
-                      <td class="n" [class]="pnlClass(p.realized)">₹{{ p.realized | number: '1.0-0' }}</td>
-                      <td class="n" [class]="pnlClass(p.unrealized)">₹{{ p.unrealized | number: '1.0-0' }}</td>
+                      <td class="n" [class]="pnlClass(p.realized)" [appTick]="p.realized">₹{{ p.realized | number: '1.0-0' }}</td>
+                      <td class="n" [class]="pnlClass(p.unrealized)" [appTick]="p.unrealized">₹{{ p.unrealized | number: '1.0-0' }}</td>
                       <td>
                         <span class="pill" [class.blue]="p.status === 'OPEN'" [class.green]="p.status === 'CLOSED'" [class.orange]="p.status === 'RISK'">{{ p.status === 'OPEN' ? 'Open' : p.status === 'CLOSED' ? 'Closed' : 'Risk' }}</span>
                         @if (p.stale) { <span class="pill amber">stale</span> }
@@ -144,7 +144,7 @@
                           <div><span class="label-caps">Instrument</span><b>{{ p.displaySymbol }}</b></div>
                           <div><span class="label-caps">Strategy</span><b>{{ p.strategy }} · {{ p.strategyId }}</b></div>
                           <div><span class="label-caps">Product</span><b>{{ p.product === 'I' ? 'Intraday (MIS)' : 'Carry (NRML)' }}</b></div>
-                          <div><span class="label-caps">LTP</span><b class="mono">{{ p.ltp | number: '1.2-2' }}</b></div>
+                          <div><span class="label-caps">LTP</span><b class="mono" [appTick]="p.ltp">{{ p.ltp | number: '1.2-2' }}</b></div>
                           <div><span class="label-caps">P&amp;L %</span><b class="mono" [class]="pnlClass(p.pnlPct)">{{ p.pnlPct === null ? '—' : (p.pnlPct | number: '1.2-2') + '%' }}</b></div>
                           <div><span class="label-caps">Token</span><b class="mono">{{ p.token }}</b></div>
                           <div><span class="label-caps">Order Tag</span><b class="mono">{{ p.orderTag }}</b></div>

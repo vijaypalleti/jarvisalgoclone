@@ -2,28 +2,59 @@
 
 <div class="modal" role="dialog" aria-modal="true">
   @if (detail(); as d) {
+    @let b = badge(d.signal);
     <header>
       <strong>{{ d.signal.symbol }}</strong>
-      <span class="pill red">{{ d.signal.side }}</span>
-      <span class="pill blue">{{ d.signal.type }}</span>
-      <span class="pill green" [class.gray]="d.signal.status !== 'Open'">{{ d.signal.status }}</span>
+      <span class="side" [class.sell]="d.signal.side === 'SHORT' || d.signal.side === 'SELL'">{{ d.signal.side === 'SHORT' || d.signal.side === 'SELL' ? '▼' : '▲' }} {{ d.signal.side }}</span>
+      <span class="badge" [class]="b.tone"><i>{{ b.icon }}</i>{{ b.label }}</span>
+      @if (d.signal.recordedExitStatus !== d.signal.exitStatus) {
+        <span class="recorded" title="What the OMS stored for this signal">OMS recorded: <s>{{ d.signal.recordedExitStatus | lowercase }}</s></span>
+      }
       <span class="sub">
-        {{ d.signal.exchange }} · {{ d.signal.segment }} · reached API {{ d.signal.reachedApiAt | date: 'dd MMM yyyy, HH:mm:ss.SSS' }}
+        {{ d.signal.exchange }} · {{ d.signal.type }} · reached API {{ d.signal.reachedApiAt | date: 'dd MMM yyyy, HH:mm:ss.SSS' }}
         · {{ d.signal.filled | number }} of {{ d.signal.requested | number }} filled · {{ d.signal.exited | number }} exited
       </span>
-      <button class="x" (click)="close()"><app-icon name="x" [size]="16" /></button>
+      <button class="x" (click)="close()" title="Close (Esc)"><app-icon name="x" [size]="16" /></button>
     </header>
 
     <div class="body">
       <div class="stats-row">
-        <div class="stats">Success {{ d.success }} · Failed {{ d.failed }} · Pending {{ d.pending }} · Open {{ d.open }} · Closed {{ d.closed }}</div>
+        <div class="stats">
+          <span class="st g">✓ Success <b>{{ d.success }}</b></span>
+          <span class="st" [class.a]="d.partial">⚠ Partial <b>{{ d.partial }}</b></span>
+          <span class="st" [class.r]="d.failed">✕ Failed <b>{{ d.failed }}</b></span>
+          <span class="st">● Pending <b>{{ d.pending }}</b></span>
+          <span class="st" [class.a]="d.openAccounts && d.signal.recordedExitStatus === 'EXIT COMPLETED'">
+            Open <b>{{ d.openAccounts }}</b>@if (d.openQty) { <small>({{ d.openQty | number }} qty)</small> }
+          </span>
+          <span class="st">Closed <b>{{ d.closed }}</b></span>
+        </div>
         <div class="acts">
           <button class="btn sm"><app-icon name="history" [size]="12" class="o" />View Lifecycle</button>
-          <button class="btn sm danger" (click)="forceExit()" [disabled]="busy() || d.signal.status !== 'Open'">
-            <app-icon name="alert-triangle" [size]="12" />{{ busy() ? 'Exiting…' : 'Force Exit' }}
+          <button class="btn sm danger" (click)="forceExit()" [disabled]="busy() === 'force' || d.openQty === 0">
+            <app-icon name="alert-triangle" [size]="12" />{{ busy() === 'force' ? 'Exiting…' : 'Force Exit all' }}
           </button>
         </div>
       </div>
+
+      <!-- summary strip: what needs a human, with the fix right there -->
+      @if (d.attention.length) {
+        <div class="attn">
+          <div class="attn-h">⚠ <b>{{ d.attention.length }} account{{ d.attention.length === 1 ? '' : 's' }} need{{ d.attention.length === 1 ? 's' : '' }} attention</b></div>
+          @for (x of d.attention.slice(0, 4); track x.clientId) {
+            <div class="attn-row">
+              <b>{{ x.clientId }}</b> <span class="muted">{{ x.broker }} · #{{ x.brokerAccount }}</span>
+              <span class="issue">{{ x.issue }}</span>
+              @if (x.qty > 0 && d.signal.recordedExitStatus === 'EXIT COMPLETED') {
+                <button class="btn xs warn" (click)="exitRemaining(x)" [disabled]="busy() === 'exit:' + x.clientId">
+                  {{ busy() === 'exit:' + x.clientId ? 'Exiting…' : 'Exit remaining ' + (x.qty | number) }}
+                </button>
+              }
+            </div>
+          }
+          @if (d.attention.length > 4) { <div class="muted more">+{{ d.attention.length - 4 }} more — use the Partial / Rejected filters below</div> }
+        </div>
+      }
 
       <h4>Broker Account Execution Summary</h4>
       <div class="filters">
@@ -31,116 +62,178 @@
         <input class="input mono" placeholder="Partner ID / account..." [(ngModel)]="f.account" (ngModelChange)="onFilter()" />
         <select class="input" [(ngModel)]="f.broker" (ngModelChange)="onFilter()">
           <option value="">All brokers</option>
-          @for (b of d.brokers; track b) { <option [value]="b">{{ b }}</option> }
+          @for (br of d.brokers; track br) { <option [value]="br">{{ br }}</option> }
         </select>
-        <select class="input" [(ngModel)]="f.status" (ngModelChange)="onFilter()">
-          <option value="">All statuses</option>
-          <option value="COMPLETED">COMPLETED</option>
-          <option value="REJECTED">REJECTED</option>
-          <option value="PENDING">PENDING</option>
-        </select>
+        <div class="schips">
+          <button [class.on]="!f.status" (click)="setStatus('')">All <b>{{ totalAccounts() }}</b></button>
+          @for (c of d.statusCounts; track c.status) {
+            <button [class.on]="f.status === c.status" [class]="statusTone(c.status)" (click)="setStatus(c.status)">
+              {{ statusIcon(c.status) }} {{ c.status | lowercase }} <b>{{ c.count }}</b>
+            </button>
+          }
+        </div>
+        <label class="chk" [title]="hiddenCount() ? hiddenCount() + ' all-zero column(s) hidden' : ''">
+          <input type="checkbox" [checked]="showAllCols()" (change)="showAllCols.set(!showAllCols())" /> Show all columns
+          @if (!showAllCols() && hiddenCount()) { <small>({{ hiddenCount() }} hidden)</small> }
+        </label>
       </div>
 
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Client/Broker</th><th>Order Status</th><th>Chunks</th><th>Req</th><th>Fill</th><th>Pending</th>
-              <th>Rejected</th><th>Cancelled</th><th>Exit</th><th>Net Open</th><th>Avg Entry</th><th>Avg Exit</th>
-              <th>Retry</th><th>Modify</th><th>Reject Reason</th><th class="r">Actions</th>
+              <th class="sticky-col">Client/Broker</th><th>Order Status</th>
+              @if (cols().chunks) { <th>Chunks</th> }
+              <th class="n">Req</th><th class="n">Fill</th>
+              @if (cols().pending) { <th class="n">Pending</th> }
+              @if (cols().rejected) { <th class="n">Rejected</th> }
+              @if (cols().cancelled) { <th class="n">Cancelled</th> }
+              <th class="n">Exit</th><th class="n">Net Open</th>
+              @if (cols().avgEntry) { <th class="n">Avg Entry</th> }
+              @if (cols().avgExit) { <th class="n">Avg Exit</th> }
+              @if (cols().retry) { <th class="n">Retry</th> }
+              @if (cols().modify) { <th class="n">Modify</th> }
+              @if (cols().reason) { <th>Reason</th> }
+              <th class="r">Actions</th>
             </tr>
           </thead>
           <tbody>
-            @for (a of d.accounts.items; track a.clientId + a.brokerAccount) {
-              @let key = a.clientId + a.brokerAccount;
-              <tr class="main" [class.open]="expanded() === key" (click)="toggle(key)">
-                <td class="client">
-                  <div><span class="bullet">›</span> {{ a.clientId }}</div>
+            @for (a of d.accounts.items; track key(a)) {
+              @let k = key(a);
+              <tr class="main" [class.open]="expanded() === k" [class.sev0]="a.severity === 0" [class.sev1]="a.severity === 1" (click)="toggle(k)">
+                <td class="client sticky-col">
+                  <div><span class="caret">{{ expanded() === k ? '▾' : '▸' }}</span> <b>{{ a.clientId }}</b></div>
                   <div class="meta">
-                    {{ a.broker }} · #{{ a.brokerAccount }}
-                    @if (a.hedge) {
-                      <span class="pill amber hedge">hedge</span>
-                      <span class="hb">⛨ hedge buy {{ a.req * 2 }}/{{ a.req * 2 }}</span>
-                    }
+                    {{ a.broker }} · <span class="cp" (click)="copy(a.brokerAccount, $event)" title="Copy account">#{{ a.brokerAccount }}</span>
+                    @if (a.hedge) { <span class="pill amber hedge">hedge</span> }
                     @if (a.attempt) { <span class="attempt">attempt {{ a.attempt }}</span> }
                   </div>
-                  <div class="oid mono">{{ a.brokerOrderId }}</div>
+                  <div class="oid mono cp" (click)="copy(a.brokerOrderId, $event)" title="Copy order id">{{ a.brokerOrderId }} ⧉</div>
                 </td>
-                <td><span class="pill" [class.green]="a.orderStatus === 'COMPLETED'" [class.red]="a.orderStatus === 'REJECTED'">{{ a.orderStatus }}</span></td>
-                <td>{{ a.chunks ?? '—' }}</td>
-                <td class="n">{{ a.req }}</td>
-                <td class="n">{{ a.fill }}</td>
-                <td class="n">{{ a.pending }}</td>
-                <td class="n">{{ a.rejected }}</td>
-                <td class="n">{{ a.cancelled }}</td>
-                <td class="n">{{ a.exit }}</td>
-                <td class="n">{{ a.netOpen }}</td>
-                <td class="n">{{ a.avgEntry | number: '1.2-2' }}</td>
-                <td class="n">{{ a.avgExit != null ? (a.avgExit | number: '1.2-2') : '—' }}</td>
-                <td class="n">{{ a.retry }}</td>
-                <td class="n">{{ a.modify ?? '—' }}</td>
-                <td class="reason">{{ a.rejectReason ?? '—' }}</td>
-                <td class="r">
-                  <button class="attempts" (click)="toggle(key); $event.stopPropagation()">
-                    <app-icon name="logs" [size]="12" /> Attempts
-                  </button>
+                <td>
+                  <span class="status" [class]="statusTone(a.orderStatus)" [title]="a.partialReason ?? a.rejectReason ?? ''">
+                    {{ statusIcon(a.orderStatus) }} {{ a.orderStatus }}
+                  </span>
+                  @if (a.anomalies.length) { <span class="anom" [title]="a.anomalies.join('\n')">⚠ {{ a.anomalies.length }}</span> }
+                  @if (a.partialReason) { <div class="why">{{ a.partialReason }}</div> }
+                </td>
+                @if (cols().chunks) {
+                  <td>@if (a.chunkOrders.length) { <span class="chunkbtn">{{ placed(a) }}/{{ a.chunkOrders.length }} {{ expanded() === k ? '▴' : '▾' }}</span> } @else { <span class="z">—</span> }</td>
+                }
+                <td class="n">{{ a.req | number }}</td>
+                <td class="n" [class.z]="isZero(a.fill)">{{ a.fill | number }}</td>
+                @if (cols().pending) { <td class="n" [class.z]="isZero(a.pending)">{{ a.pending | number }}</td> }
+                @if (cols().rejected) { <td class="n" [class.z]="isZero(a.rejected)" [class.bad]="!isZero(a.rejected)">{{ a.rejected | number }}</td> }
+                @if (cols().cancelled) { <td class="n" [class.z]="isZero(a.cancelled)">{{ a.cancelled | number }}</td> }
+                <td class="n" [class.z]="isZero(a.exit)">{{ a.exit | number }}</td>
+                <td class="n" [class.z]="isZero(a.netOpen)" [class.bad]="a.netOpen > 0 && d.signal.recordedExitStatus === 'EXIT COMPLETED'">{{ a.netOpen | number }}</td>
+                @if (cols().avgEntry) { <td class="n" [class.z]="isZero(a.avgEntry)">{{ a.avgEntry ? (a.avgEntry | number: '1.2-2') : '—' }}</td> }
+                @if (cols().avgExit) { <td class="n" [class.z]="isZero(a.avgExit)">{{ a.avgExit != null ? (a.avgExit | number: '1.2-2') : '—' }}</td> }
+                @if (cols().retry) { <td class="n" [class.z]="isZero(a.retry)">{{ a.retry }}</td> }
+                @if (cols().modify) { <td class="n" [class.z]="isZero(a.modify)">{{ a.modify ?? '—' }}</td> }
+                @if (cols().reason) { <td class="reason" [title]="a.rejectReason ?? a.partialReason ?? ''">{{ a.rejectReason ?? (a.partialReason ? 'see status' : '—') }}</td> }
+                <td class="r actions">
+                  @if (a.netOpen > 0 && d.signal.recordedExitStatus === 'EXIT COMPLETED') {
+                    <button class="btn xs warn" (click)="exitRemaining(a, $event)" [disabled]="busy() === 'exit:' + a.clientId">
+                      {{ busy() === 'exit:' + a.clientId ? '…' : 'Exit remaining ' + (a.netOpen | number) }}
+                    </button>
+                  }
+                  <button class="attempts" (click)="toggle(k); $event.stopPropagation()"><app-icon name="logs" [size]="12" /> Attempts</button>
                 </td>
               </tr>
 
-              @if (expanded() === key) {
+              @if (expanded() === k) {
                 <tr class="expand">
-                  <td colspan="16">
-                    @if (a.hedge; as h) {
+                  <td [attr.colspan]="colspan()">
+                    @if (a.chunkOrders.length) {
+                      <div class="chunk-head">
+                        Chunk orders for <b>{{ a.clientId }}</b> · {{ a.broker }} · #{{ a.brokerAccount }} —
+                        {{ a.chunkOrders.length }} recorded, <b [class.bad]="placed(a) < a.chunkOrders.length">{{ placed(a) }} placed at broker</b>
+                      </div>
+                      @for (an of a.anomalies; track an) { <div class="anom-line">⚠ {{ an }}</div> }
+                      <table class="inner">
+                        <thead><tr><th>Chunk</th><th>Task Status</th><th>Broker Status</th><th class="n">Req</th><th class="n">Fill</th><th class="n">Unfilled</th><th>Filled</th><th class="n">Attempts</th><th class="n">Modify</th><th>Broker Order</th><th>Why unfilled</th><th></th></tr></thead>
+                        <tbody>
+                          @for (c of a.chunkOrders; track c.index) {
+                            <tr [class.bad-row]="c.unfilled > 0">
+                              <td class="mono">{{ c.index }} / {{ a.chunkOrders.length }}</td>
+                              <td><span class="status" [class]="statusTone(c.taskStatus)">{{ statusIcon(c.taskStatus) }} {{ c.taskStatus }}</span></td>
+                              <td>
+                                @if (chunkAnomaly(c)) { <span class="status amber" title="Broker reported COMPLETED but nothing traded / no order id">⚠ {{ c.brokerStatus }} · 0 filled</span> }
+                                @else { <span class="status" [class]="statusTone(c.brokerStatus)">{{ statusIcon(c.brokerStatus) }} {{ c.brokerStatus }}</span> }
+                              </td>
+                              <td class="n">{{ c.req | number }}</td>
+                              <td class="n" [class.z]="isZero(c.fill)">{{ c.fill | number }}</td>
+                              <td class="n" [class.z]="isZero(c.unfilled)" [class.bad]="c.unfilled > 0">{{ c.unfilled | number }}</td>
+                              <td><span class="mini"><i [style.width.%]="c.req ? (c.fill / c.req) * 100 : 0"></i></span></td>
+                              <td class="n">{{ c.attempts }}</td>
+                              <td class="n" [class.z]="isZero(c.modify)">{{ c.modify ?? '—' }}</td>
+                              <td class="mono">
+                                @if (c.brokerOrder) { <span class="cp" (click)="copy(c.brokerOrder, $event)" title="Copy">{{ c.brokerOrder }} ⧉</span> }
+                                @else { <span class="bad">— not placed</span> }
+                              </td>
+                              <td class="why-cell">{{ c.reason ?? (c.unfilled > 0 ? 'No reason recorded' : '—') }}</td>
+                              <td class="r">
+                                @if (c.unfilled > 0) {
+                                  <button class="btn xs warn" (click)="retryChunk(a, c, $event)" [disabled]="busy() === 'chunk:' + a.clientId + ':' + c.index">
+                                    {{ busy() === 'chunk:' + a.clientId + ':' + c.index ? '…' : 'Retry chunk ' + c.index }}
+                                  </button>
+                                }
+                              </td>
+                            </tr>
+                          }
+                        </tbody>
+                      </table>
+                    } @else if (a.hedge) {
+                      @let h = a.hedge;
                       <div class="hedge-box">
                         <div class="hb-head">
                           <strong>SHORT Order &amp; Premium Hedge</strong>
                           <span class="center">{{ a.clientId }} · {{ a.broker }} · #{{ a.brokerAccount }}</span>
-                          <span class="pill" [class.green]="a.fill > 0" [class.red]="a.fill === 0">{{ a.fill > 0 ? 'SHORT FILLED' : 'SHORT FAILED' }}</span>
+                          <span class="status" [class]="a.fill > 0 ? 'green' : 'red'">{{ a.fill > 0 ? '✓ SHORT FILLED' : '✕ SHORT FAILED' }}</span>
                         </div>
                         <p>{{ h.summary }}</p>
-                        <p>
-                          Premium CE {{ a.req }} bought / {{ h.squared }} squared / <b class="red">{{ a.req - h.squared }}</b> <span class="red">open</span>
-                          · PE {{ a.req }} bought / {{ h.squared }} squared / <b class="red">{{ a.req - h.squared }}</b> <span class="red">open</span>
-                        </p>
-
                         <table class="inner">
-                          <thead><tr><th>Short Order</th><th>Status</th><th>Req</th><th>Fill</th><th>Unfilled</th><th>Attempts</th><th>Broker Order</th><th>Premium CE/PE Bought</th><th>Completed</th></tr></thead>
+                          <thead><tr><th>Short Order</th><th>Status</th><th class="n">Req</th><th class="n">Fill</th><th class="n">Unfilled</th><th class="n">Attempts</th><th>Broker Order</th><th>Premium CE/PE Bought</th><th>Completed</th></tr></thead>
                           <tbody>
                             @for (s of h.shortOrders; track s.brokerOrder) {
                               <tr>
                                 <td>{{ s.label }}</td>
-                                <td><span class="pill" [class.red]="s.status === 'FAILED'" [class.green]="s.status === 'COMPLETED'">{{ s.status }}</span></td>
-                                <td class="n">{{ s.req }}</td><td class="n">{{ s.fill }}</td><td class="n">{{ s.unfilled }}</td><td class="n">{{ s.attempts }}</td>
-                                <td class="mono sm">{{ s.brokerOrder }}</td><td class="n">{{ s.premiumBought }}</td>
+                                <td><span class="status" [class]="statusTone(s.status)">{{ statusIcon(s.status) }} {{ s.status }}</span></td>
+                                <td class="n">{{ s.req }}</td><td class="n" [class.z]="isZero(s.fill)">{{ s.fill }}</td>
+                                <td class="n" [class.z]="isZero(s.unfilled)" [class.bad]="s.unfilled > 0">{{ s.unfilled }}</td><td class="n">{{ s.attempts }}</td>
+                                <td class="mono cp" (click)="copy(s.brokerOrder, $event)">{{ s.brokerOrder }} ⧉</td><td class="n">{{ s.premiumBought }}</td>
                                 <td>{{ s.completed | date: 'h:mm a' }}</td>
                               </tr>
                             }
                           </tbody>
                         </table>
-
                         <div class="sub-title">Premium Hedge Orders</div>
                         <table class="inner">
-                          <thead><tr><th>Leg</th><th>Side</th><th>Instrument</th><th>Status</th><th>Req</th><th>Fill</th><th>Broker Order</th><th>Error</th></tr></thead>
+                          <thead><tr><th>Leg</th><th>Side</th><th>Instrument</th><th>Status</th><th class="n">Req</th><th class="n">Fill</th><th>Broker Order</th><th>Error</th></tr></thead>
                           <tbody>
                             @for (o of h.hedgeOrders; track o.brokerOrder) {
                               <tr>
-                                <td><span class="pill blue">{{ o.leg }}</span></td>
-                                <td><span class="pill green">{{ o.side }}</span></td>
-                                <td class="mono sm">{{ o.instrument }}</td>
-                                <td><span class="pill green">{{ o.status }}</span></td>
+                                <td><span class="pill blue">{{ o.leg }}</span></td><td><span class="pill green">{{ o.side }}</span></td>
+                                <td class="mono">{{ o.instrument }}</td>
+                                <td><span class="status" [class]="statusTone(o.status)">{{ statusIcon(o.status) }} {{ o.status }}</span></td>
                                 <td class="n">{{ o.req }}</td><td class="n">{{ o.fill }}</td>
-                                <td class="mono sm">{{ o.brokerOrder }}</td><td>{{ o.error ?? '—' }}</td>
+                                <td class="mono cp" (click)="copy(o.brokerOrder, $event)">{{ o.brokerOrder }} ⧉</td><td>{{ o.error ?? '—' }}</td>
                               </tr>
                             }
                           </tbody>
                         </table>
                       </div>
                     } @else {
-                      <div class="no-attempts">Single attempt — order {{ a.brokerOrderId }} {{ a.orderStatus | lowercase }} with {{ a.fill }}/{{ a.req }} filled. No hedge or retry activity.</div>
+                      <div class="no-attempts">Single attempt — order <span class="mono cp" (click)="copy(a.brokerOrderId, $event)">{{ a.brokerOrderId }} ⧉</span>
+                        {{ a.orderStatus | lowercase }} with {{ a.fill | number }}/{{ a.req | number }} filled.
+                        @if (a.rejectReason) { <b class="bad">Reason: {{ a.rejectReason }}</b> } @else { No hedge, chunk or retry activity. }</div>
                     }
                   </td>
                 </tr>
               }
+            } @empty {
+              <tr><td [attr.colspan]="colspan()" class="empty">No accounts match these filters.</td></tr>
             }
           </tbody>
         </table>
@@ -158,4 +251,5 @@
   } @else {
     <div class="loading">Loading execution summary…</div>
   }
+  @if (toast()) { <div class="mtoast">{{ toast() }}</div> }
 </div>

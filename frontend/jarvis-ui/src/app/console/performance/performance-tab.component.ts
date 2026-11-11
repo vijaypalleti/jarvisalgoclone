@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { interval } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { IconComponent } from '../../shared/icon.component';
+import { TickDirective } from '../../shared/tick.directive';
+import { MultiSelectComponent, MsOption } from '../../shared/multi-select.component';
 import { OpsService } from '../../core/ops.service';
 import { ApiService } from '../../core/api.service';
 import { AccountListItem, PerformanceSummary, UserPerformanceDetail } from '../../core/ops.models';
@@ -15,7 +17,7 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 @Component({
   selector: 'app-performance-tab',
   standalone: true,
-  imports: [IconComponent, DatePipe, DecimalPipe, FormsModule],
+  imports: [IconComponent, TickDirective, MultiSelectComponent, DatePipe, DecimalPipe, FormsModule],
   templateUrl: './performance-tab.component.html',
   styleUrl: './performance-tab.component.scss',
 })
@@ -36,8 +38,15 @@ export class PerformanceTabComponent {
   filtersOpen = signal(true);
   baskets = signal<string[]>([]);
   strategies = signal<string[]>([]);
+  /** strategy name → production code (STRAT…), shown next to the name like the real dropdown */
+  strategyCodes = signal<Record<string, string>>({});
   basket = signal('');
-  strategy = signal('');
+  /** selected strategies (empty = all). P&L, positions and trades are computed from these only. */
+  strategySel = signal<string[]>([]);
+  /** label used in the scope texts: '' (all) · the name · 'N strategies' */
+  strategy = computed(() => { const s = this.strategySel(); return s.length === 0 ? '' : s.length === 1 ? s[0] : `${s.length} strategies`; });
+  /** options for the multi-select: name + production code on the right */
+  strategyOptions = computed<MsOption[]>(() => this.strategies().map(s => ({ value: s, label: s, hint: this.strategyCodes()[s] })));
   from = signal(iso(new Date()));
   to = signal(iso(new Date()));
   range = signal<'today' | '7d' | '30d' | 'mtd' | 'custom'>('today');
@@ -49,7 +58,7 @@ export class PerformanceTabComponent {
   listFilter = signal({ partnerId: '', name: '', broker: '' });
   sort = signal<'name' | 'pnl'>('name');
   sortAsc = signal(true);
-  autoRefresh = signal(false);
+  autoRefresh = signal(true);   // demo simulator keeps P&L moving
   collapsed = signal(false);
 
   data = signal<PerformanceSummary | null>(null);
@@ -75,18 +84,22 @@ export class PerformanceTabComponent {
   allChecked = computed(() => this.users().length > 0 && this.users().every(u => this.checked().has(u.clientId)));
 
   constructor() {
-    this.api.signalFilters().subscribe(f => { this.baskets.set(f.baskets); this.strategies.set(f.strategies); });
+    this.api.signalFilters().subscribe(f => {
+      this.baskets.set(f.baskets); this.strategies.set(f.strategies);
+      this.strategyCodes.set(Object.fromEntries(f.strategyCatalog.map(x => [x.name, x.code])));
+    });
     effect(() => {
       this.state.refreshTick();
       const lf = this.listFilter();
-      this.ops.performance({ basket: this.basket(), partnerId: lf.partnerId, name: lf.name, broker: lf.broker }).subscribe(d => {
+      const strategies = this.strategySel().join(',') || undefined;
+      this.ops.performance({ basket: this.basket(), partnerId: lf.partnerId, name: lf.name, broker: lf.broker, strategies }).subscribe(d => {
         this.data.set(d);
         const active = this.activeId();
         if (!active || !d.users.some(u => u.clientId === active)) this.open(d.users[0]?.clientId ?? null);
         else this.loadDetail();
       });
     });
-    interval(15_000).pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => { if (this.autoRefresh()) this.refreshPnl(); });
+    interval(this.state.livePollMs).pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => { if (this.autoRefresh()) this.refreshPnl(); });
   }
 
   setRange(r: 'today' | '7d' | '30d' | 'mtd') {
@@ -111,7 +124,7 @@ export class PerformanceTabComponent {
   loadDetail() {
     const id = this.activeId();
     if (!id) { this.detail.set(null); return; }
-    this.ops.userPerformance(id).subscribe(d => this.detail.set(d));
+    this.ops.userPerformance(id, this.strategySel().join(',') || undefined).subscribe(d => this.detail.set(d));
   }
   toggleCheck(u: AccountListItem, ev: Event) {
     ev.stopPropagation();

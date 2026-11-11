@@ -1,0 +1,96 @@
+<h2 class="page-title">Realtime Data <small>every source → Redis → SQL Server · live via SignalR</small></h2>
+
+@let s = status();
+<div class="pipeline card">
+  <div class="stage"><app-icon name="zap" [size]="14" /><b>Sources</b><span class="muted">Simulator · Fyers poller</span></div>
+  <span class="arrow">→</span>
+  <div class="stage" [class.bad]="s && !s.redisConnected">
+    <app-icon name="layers" [size]="14" /><b>Redis</b>
+    <span [class.pos]="s?.redisConnected" [class.neg]="s && !s.redisConnected">{{ s ? (s.redisConnected ? 'connected' : 'not connected') : '…' }}</span>
+  </div>
+  <span class="arrow">→</span>
+  <div class="stage" [class.bad]="s && (!s.persister.sqlReady || s.persister.lastError)">
+    <app-icon name="database" [size]="14" /><b>SQL Server</b>
+    <span class="muted">{{ s?.persister?.rowsWrittenThisRun ?? 0 | number }} rows saved this run
+      @if (s?.persister?.lastFlushUtc) { · last {{ s!.persister.lastFlushUtc | date: 'HH:mm:ss' }} }</span>
+  </div>
+  <div class="fyers" [class.warn]="s && s.fyersPoller.state !== 'polling'">
+    <app-icon name="radio" [size]="13" /> Fyers poller: <b>{{ s?.fyersPoller?.state ?? '…' }}</b>
+    @if (s?.fyersPoller?.lastError; as e) { <span class="muted">· {{ e }}</span> }
+  </div>
+  @if (s?.persister?.lastError; as e) { <div class="err">⚠ {{ e }}</div> }
+</div>
+
+<div class="layout">
+  <div class="card topics">
+    <table>
+      <thead><tr><th>Topic</th><th class="n">Published</th><th class="n">Redis</th><th class="n">Pending</th><th class="n">SQL rows</th></tr></thead>
+      <tbody>
+        @for (t of s?.topics ?? []; track t.topic) {
+          <tr [class.on]="t.topic === topic()" (click)="select(t.topic)" [title]="t.description + ' · key = ' + t.keyMeaning">
+            <td><span class="src" [class.fy]="t.source === 'Fyers'">{{ t.source }}</span><b>{{ t.topic }}</b></td>
+            <td class="n">{{ t.publishedThisRun | number }}</td>
+            <td class="n">{{ t.redisStreamLength | number }}</td>
+            <td class="n" [class.neg]="t.pendingToSql > 0">{{ t.pendingToSql | number }}</td>
+            <td class="n">{{ t.sqlRows | number }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card detail">
+    @if (current(); as t) {
+      <div class="d-head">
+        <div>
+          <b class="mono">{{ t.topic }}</b>
+          <div class="muted">{{ t.description }} · key = {{ t.keyMeaning }}</div>
+        </div>
+        <div class="seg">
+          <button [class.on]="view() === 'latest'" (click)="setView('latest')">Latest <small>Redis</small></button>
+          <button [class.on]="view() === 'live'" (click)="setView('live')">Live <small>{{ feed().length }}</small></button>
+          <button [class.on]="view() === 'history'" (click)="setView('history')">History <small>SQL</small></button>
+        </div>
+      </div>
+
+      @if (view() === 'history') {
+        <div class="hist-bar">
+          <input class="input" placeholder="Filter by key ({{ t.keyMeaning }})" [value]="historyKey"
+                 (input)="historyKey = $any($event.target).value" (keyup.enter)="loadHistory()" />
+          <button class="btn" (click)="loadHistory()"><app-icon name="search" [size]="13" />Load</button>
+          <code class="sql" title="Run this in SSMS / VS Code (database JarvisMarket)">{{ sqlFor(t.topic) }}</code>
+        </div>
+      }
+
+      @let rows = view() === 'latest' ? latest() : view() === 'live' ? feed() : history();
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            @if (view() !== 'latest') { <th>Time</th> }
+            <th>Key</th>
+            @for (c of columns(); track c) { <th [class.n]="rows.length > 0 && isNum(rows[0].data[c])">{{ c }}</th> }
+          </tr></thead>
+          <tbody>
+            @for (r of rows; track $index) {
+              <tr>
+                @if (view() !== 'latest') { <td class="mono muted">{{ r.timeUtc | date: 'HH:mm:ss' }}</td> }
+                <td class="mono">{{ r.key }}</td>
+                @for (c of columns(); track c) {
+                  @let v = r.data?.[c];
+                  <td [class.n]="isNum(v)" [class]="tone(c, v)">{{ isNum(v) ? (v | number: '1.0-2') : (v ?? '—') }}</td>
+                }
+              </tr>
+            } @empty {
+              <tr><td class="empty" [attr.colspan]="columns().length + 2">
+                @if (t.source === 'Fyers' && s?.fyersPoller?.state !== 'polling') {
+                  No Fyers data yet. The poller is "{{ s?.fyersPoller?.state }}". Set today's token (Broker Live → Update token, or dotnet user-secrets).
+                } @else if (view() === 'live') { Waiting for the next change… }
+                @else { Nothing yet. }
+              </td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>

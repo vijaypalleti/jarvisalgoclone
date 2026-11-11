@@ -20,22 +20,57 @@
   </div>
 
   @if (state.overview(); as o) {
-    <div class="relay">
-      <span class="pill green dot">Relay {{ o.relay.live ? 'Live' : 'Down' }}</span>
-      <span>Dispatch <b class="g">{{ o.relay.dispatchPct }}%</b></span>
-      <span>Exec <b class="o">{{ o.relay.execPct }}%</b></span>
-      <span>DLQ <b class="r">{{ o.relay.dlqPct | number: '1.1-1' }}%</b></span>
-      <span>Lag <b>{{ o.relay.lag ?? '–' }}</b></span>
+    <!-- one pill: relay state + its key rates (was a separate strip) -->
+    <div class="relay" [class.down]="!o.relay.live"
+         [title]="'Dispatch ' + o.relay.dispatchPct + '% · Exec ' + o.relay.execPct + '% · DLQ ' + o.relay.dlqPct + '% · Lag ' + (o.relay.lag ?? '–')">
+      <i class="dot"></i><b>Relay {{ o.relay.live ? 'Live' : 'Down' }}</b>
+      <span class="sep"></span>Exec <b class="o">{{ o.relay.execPct }}%</b>
+      <span class="sep"></span>DLQ <b class="r">{{ o.relay.dlqPct | number: '1.1-1' }}%</b>
     </div>
+  }
+  @if (state.sim(); as sim) {
+    <!-- demo simulator: makes the fake OMS data move (P&L, positions, exits, signals) -->
+    <div class="sim" [class.paused]="!sim.running">
+      <button class="sim-main" (click)="feedOpen.set(!feedOpen())" title="Show recent simulated events">
+        <i class="dot"></i><b>{{ sim.running ? 'Demo live' : 'Demo paused' }}</b>
+        <span class="sep"></span>NIFTY <b class="mono">{{ sim.spot | number: '1.2-2' }}</b>
+        <b class="mono" [class.up]="sim.spotChangePct >= 0" [class.down]="sim.spotChangePct < 0">
+          {{ sim.spotChangePct >= 0 ? '▲' : '▼' }} {{ sim.spotChangePct | number: '1.2-2' }}%</b>
+      </button>
+      <select (change)="setScenario($any($event.target).value)" title="Market scenario">
+        @for (s of scenarios; track s) { <option [value]="s" [selected]="s === sim.scenario">{{ s }}</option> }
+      </select>
+      <button class="sim-btn" (click)="toggleSim()" [title]="sim.running ? 'Pause simulation' : 'Resume simulation'">
+        {{ sim.running ? '❚❚' : '▶' }}
+      </button>
+      @if (feedOpen()) {
+        <div class="feed" (click)="$event.stopPropagation()">
+          <div class="feed-h">
+            <span>Simulated events</span>
+            <span class="muted">Total P&amp;L <b class="mono" [class.up]="sim.totalPnl >= 0" [class.down]="sim.totalPnl < 0">₹{{ sim.totalPnl | number: '1.0-0' }}</b>
+              · {{ sim.openPositions }} open</span>
+          </div>
+          @for (e of sim.events; track $index) {
+            <div class="ev"><span class="t mono">{{ e.time | date: 'HH:mm:ss' }}</span><span class="k k-{{ e.kind }}">{{ e.kind }}</span>{{ e.text }}</div>
+          } @empty { <div class="muted ev">Waiting for the first events…</div> }
+        </div>
+      }
+    </div>
+  }
+  @if (bannerHidden() && issueCount() > 0) {
+    <button class="issues-chip" (click)="showBanner()" title="Show the dead-letter / failed-execution banner">
+      ⚠ {{ issueCount() | number }}
+    </button>
   }
 </div>
 
 @if (state.overview(); as o) {
-  @if (o.deadLettersInRange > 0 || o.failedExecutionsInRange > 0) {
+  @if ((o.deadLettersInRange > 0 || o.failedExecutionsInRange > 0) && !bannerHidden()) {
     <div class="banner">
       <app-icon name="alert-triangle" [size]="13" />
-      {{ o.deadLettersInRange | number }} dead letters and {{ o.failedExecutionsInRange | number }} failed executions in the
-      Overview range ({{ o.rangeFrom | date: 'dd MMM' }} – {{ o.rangeTo | date: 'dd MMM' }}) — check Infrastructure and Logs &amp; Audit.
+      <span class="btext">{{ o.deadLettersInRange | number }} dead letters and {{ o.failedExecutionsInRange | number }} failed executions in the
+      Overview range ({{ o.rangeFrom | date: 'dd MMM' }} – {{ o.rangeTo | date: 'dd MMM' }}) — check Infrastructure and Logs &amp; Audit.</span>
+      <button class="bx" (click)="hideBanner()" title="Hide for this session">✕</button>
     </div>
   }
 } @else if (state.loading()) {

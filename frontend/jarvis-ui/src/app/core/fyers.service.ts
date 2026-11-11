@@ -30,6 +30,11 @@ export interface FyersQuote {
   open: number; high: number; low: number; prevClose: number; volume: number;
 }
 
+export interface FyersAuthConfig {
+  appId: string | null; secretConfigured: boolean; redirectUri: string; oneClick: boolean;
+  saved: { savedUtc: string; accessExpiresAt: string | null; canRenewWithPin: boolean; refreshExpiresAt: string | null } | null;
+}
+
 const BASE = '/api/fyers';
 
 /** Read-only live Fyers data via the .NET API (the token never reaches the browser). */
@@ -44,4 +49,10 @@ export class FyersService {
   holdings() { return this.http.get<FyersHolding[]>(`${BASE}/holdings`); }
   quotes(symbols?: string) { return this.http.get<FyersQuote[]>(`${BASE}/quotes`, { params: symbols ? { symbols } : {} }); }
   setToken(clientId: string, accessToken: string) { return this.http.post<void>(`${BASE}/token`, { clientId, accessToken }); }
+
+  // in-app login (replaces the Python session script); secret + tokens stay in the API
+  authConfig() { return this.http.get<FyersAuthConfig>(`${BASE}/auth/config`); }
+  authStart() { return this.http.get<{ url: string; oneClick: boolean; redirectUri: string }>(`${BASE}/auth/start`); }
+  authExchange(input: string) { return this.http.post<{ message: string }>(`${BASE}/auth/exchange`, { input }); }
+  authRenew(pin: string) { return this.http.post<{ message: string }>(`${BASE}/auth/renew`, { pin }); }
 }

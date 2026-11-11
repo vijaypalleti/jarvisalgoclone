@@ -1,4 +1,7 @@
-import { Component, OnInit, computed, inject, input } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, input, signal } from '@angular/core';
+import { interval } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { SimScenario, SimService } from '../core/sim.service';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { IconComponent } from '../shared/icon.component';
@@ -42,7 +45,35 @@ export class ConsoleComponent implements OnInit {
 
   activeLabel = computed(() => this.tabs.find(t => t.key === this.active())?.label ?? '');
 
-  ngOnInit() { this.state.refresh(); }
+  private simApi = inject(SimService);
+  private destroy = inject(DestroyRef);
+
+  ngOnInit() {
+    this.state.refresh();
+    this.state.poll();
+    // header numbers + demo-sim status stay live without reloading the tabs
+    interval(this.state.livePollMs).pipe(takeUntilDestroyed(this.destroy)).subscribe(() => this.state.poll());
+  }
+
+  // ---- demo market simulator
+  scenarios: SimScenario[] = ['Calm', 'Normal', 'Volatile', 'Rally', 'Crash'];
+  feedOpen = signal(false);
+  setScenario(s: SimScenario) { this.simApi.scenario(s).subscribe(x => this.state.sim.set(x)); }
+  toggleSim() {
+    const running = this.state.sim()?.running;
+    (running ? this.simApi.pause() : this.simApi.resume()).subscribe(x => this.state.sim.set(x));
+  }
+
+  // ---- dismissible dead-letter banner (per browser session)
+  private static readonly BANNER_KEY = 'jarvis.banner.hidden';
+  bannerHidden = signal(ConsoleComponent.readHidden());
+  issueCount = computed(() => {
+    const o = this.state.overview();
+    return o ? o.deadLettersInRange + o.failedExecutionsInRange : 0;
+  });
+  hideBanner() { this.bannerHidden.set(true); try { sessionStorage.setItem(ConsoleComponent.BANNER_KEY, '1'); } catch { /* ignore */ } }
+  showBanner() { this.bannerHidden.set(false); try { sessionStorage.removeItem(ConsoleComponent.BANNER_KEY); } catch { /* ignore */ } }
+  private static readHidden() { try { return sessionStorage.getItem(ConsoleComponent.BANNER_KEY) === '1'; } catch { return false; } }
 
   select(key: string) {
     this.router.navigate([], { queryParams: { tab: key === 'overview' ? null : key }, queryParamsHandling: 'merge' });

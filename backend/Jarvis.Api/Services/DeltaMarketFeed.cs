@@ -26,6 +26,13 @@ public record DeltaSnapshot(DeltaFeedStatus Status, DeltaTicker? Ticker, DeltaOr
 public class MarketHub(DeltaMarketFeed feed) : Hub
 {
     public DeltaSnapshot Snapshot() => feed.Snapshot();
+
+    /// <summary>Receive "rt" events for a real-time bus topic (e.g. "sim.pnl", "fyers.orders").</summary>
+    public Task Subscribe(string topic) => RealtimeBus.IsKnown(topic)
+        ? Groups.AddToGroupAsync(Context.ConnectionId, RealtimeBus.HubGroup(topic))
+        : throw new HubException($"Unknown topic '{topic}'");
+
+    public Task Unsubscribe(string topic) => Groups.RemoveFromGroupAsync(Context.ConnectionId, RealtimeBus.HubGroup(topic));
 }
 
 /// <summary>

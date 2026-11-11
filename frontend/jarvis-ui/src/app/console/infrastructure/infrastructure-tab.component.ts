@@ -65,7 +65,7 @@ export class InfrastructureTabComponent {
   constructor() {
     effect(() => { this.state.refreshTick(); this.load(); });
     const destroy = inject(DestroyRef);
-    interval(10_000).pipe(takeUntilDestroyed(destroy)).subscribe(() => { if (this.autoRefresh()) this.load(true); });
+    interval(this.state.livePollMs).pipe(takeUntilDestroyed(destroy)).subscribe(() => { if (this.autoRefresh()) this.load(true); });
     interval(1_000).pipe(takeUntilDestroyed(destroy)).subscribe(() => this.now.set(Date.now()));
   }
 

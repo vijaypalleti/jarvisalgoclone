@@ -62,7 +62,7 @@ public class AlertAccount
     public required string ReasonCode { get; init; }   // MARGIN_SHORTFALL / BROKER_REJECTION
     public int ExtraSymbols { get; init; }
     public required string Message { get; init; }
-    public DateTime LastTime { get; init; }
+    public DateTime LastTime { get; set; }
     public List<AlertRejection> Rejections { get; init; } = new();
 }
 
@@ -98,13 +98,13 @@ public class Signal
     public required string Exchange { get; init; }      // BFO / NFO
     public required string Segment { get; init; }       // S1EN
     public long StrategyRef { get; init; }              // #1134486
-    public required string StrategyName { get; init; }  // SWL_SENSEX...
+    public required string StrategyName { get; init; }  // real strategy name, e.g. B6_BK_STBT (Data/Catalog.cs)
     public required string Basket { get; init; }
     public required string Side { get; init; }          // SHORT / LONG
     public required string Type { get; init; }          // entry / exit
     public required string Status { get; set; }         // Open / Closed
     public required string ExitStatus { get; set; }     // EXIT PENDING / EXIT COMPLETED / PARTIAL EXIT
-    public bool Chunked { get; init; }
+    public bool Chunked { get; set; }
     public string CorrelationId { get; init; } = Guid.NewGuid().ToString();
     public List<SignalAccountExecution> Accounts { get; init; } = new();
 
@@ -116,8 +116,29 @@ public class Signal
     public int Errors => Accounts.Sum(a => a.Hedge?.ShortOrders.Count(s => s.Status == "FAILED") ?? 0)
                          + Accounts.Count(a => a.OrderStatus == "REJECTED");
     public int OpenAccounts => Accounts.Count(a => a.NetOpen > 0);
-    public int ClosedAccounts => Accounts.Count(a => a.Hedge != null);
+    public int ClosedAccounts => Accounts.Count(a => a.NetOpen == 0 && a.Exit > 0);
     public int TotalAccounts => Accounts.Count;
+
+    // ---- truth derived from the accounts (the recorded Status/ExitStatus can be wrong)
+    public string? ExitCorrelationId { get; set; }
+    /// <summary>An exit was sent for this signal (exit-type signal, or the OMS recorded the exit as done).</summary>
+    public bool ExitSent => Type == "exit" || ExitStatus == "EXIT COMPLETED";
+    /// <summary>Qty still open after an exit was sent — the OMS believes these are flat.</summary>
+    public int ResidualQty => ExitSent ? Accounts.Sum(a => a.NetOpen) : 0;
+    public int ResidualAccounts => ExitSent ? Accounts.Count(a => a.NetOpen > 0) : 0;
+    public int AnomalyCount => Accounts.Sum(a => a.Anomalies.Count);
+    public int ChunksTotal => Accounts.Sum(a => a.ChunkOrders.Count);
+    public int ChunksDone => Accounts.Sum(a => a.ChunkOrders.Count(c => c.Fill >= c.Req));
+    /// <summary>
+    /// Problems a human still has to act on. Hedge short orders that failed once but were re-placed and filled
+    /// are counted in <see cref="Errors"/> (history) but are NOT unresolved.
+    /// </summary>
+    public int UnresolvedIssues => Accounts.Count(a => a.OrderStatus is "REJECTED" or "FAILED" or "PARTIAL") + AnomalyCount;
+    public bool NeedsAttention => ResidualQty > 0 || UnresolvedIssues > 0;
+    /// <summary>Status follows the worst account: any residual ⇒ partial, never "completed".</summary>
+    public string EffectiveStatus => ResidualQty > 0 ? "Partial" : Status;
+    public string EffectiveExitStatus => ResidualQty > 0 ? "EXIT PARTIAL" : ExitStatus;
+    public string Health => ResidualQty > 0 ? "residual" : UnresolvedIssues > 0 ? "error" : Status == "Open" ? "open" : "ok";
     public HedgeRollup? HedgeRollup
     {
         get
@@ -156,6 +177,37 @@ public class SignalAccountExecution
     public string? RejectReason { get; init; }
     public int? Attempt { get; init; }
     public HedgeDetail? Hedge { get; init; }
+
+    /// <summary>Exit chunk orders (large quantities are split into freeze-limit sized chunks).</summary>
+    public List<ChunkOrder> ChunkOrders { get; set; } = new();
+    public string? PartialReason { get; set; }
+
+    /// <summary>Records that contradict each other — shown with ⚠ instead of a green pill.</summary>
+    public List<string> Anomalies => ChunkOrders.SelectMany(c => c.Anomalies(ChunkOrders.Count)).ToList();
+    /// <summary>0 = worst. Partial → failed/rejected → pending → completed.</summary>
+    public int Severity => OrderStatus switch { "PARTIAL" => 0, "FAILED" or "REJECTED" => 1, "PENDING" => 2, _ => Anomalies.Count > 0 ? 2 : 3 };
+}
+
+public class ChunkOrder
+{
+    public int Index { get; init; }
+    public string TaskStatus { get; set; } = "EXECUTED";   // OMS task state
+    public string BrokerStatus { get; set; } = "COMPLETED"; // what the broker reported
+    public int Req { get; init; }
+    public int Fill { get; set; }
+    public int Unfilled => Req - Fill;
+    public int Attempts { get; set; } = 1;
+    public int? Modify { get; set; }
+    public string? BrokerOrder { get; set; }
+    public string? Reason { get; set; }
+
+    public IEnumerable<string> Anomalies(int total)
+    {
+        if (BrokerStatus == "COMPLETED" && Fill == 0 && Req > 0)
+            yield return $"Chunk {Index}/{total}: broker says COMPLETED but 0 filled";
+        if (TaskStatus == "EXECUTED" && BrokerOrder is null)
+            yield return $"Chunk {Index}/{total}: no broker order id — never reached the broker";
+    }
 }
 
 public class HedgeDetail
@@ -179,10 +231,17 @@ public record SignalListItem(
     long StrategyRef, string StrategyName, string Side, string Type, string Status,
     string ExitStatus, int Errors, int Requested, int Filled, int Exited,
     int RejectedOrUnfilled, HedgeRollup? Hedge, int OpenAccounts, int ClosedAccounts,
-    int TotalAccounts, string CorrelationId);
+    int TotalAccounts, string CorrelationId,
+    // derived truth
+    string? ExitCorrelationId, string RecordedExitStatus, string Health, bool NeedsAttention,
+    int ResidualQty, int ResidualAccounts, int AnomalyCount, int ChunksDone, int ChunksTotal, int OpenQty, int UnresolvedIssues);
 
-public record SignalListResponse(int Total, int OpenEntrySignals, List<SignalListItem> Items);
+public record SignalListResponse(int Total, int OpenEntrySignals, int AttentionCount, List<SignalListItem> Items);
+
+public record AttentionItem(string ClientId, string Broker, string BrokerAccount, string Issue, int Qty);
+public record StatusCount(string Status, int Count);
 
 public record SignalDetailResponse(
-    SignalListItem Signal, int Success, int Failed, int Pending, int Open, int Closed,
+    SignalListItem Signal, int Success, int Partial, int Failed, int Pending, int OpenAccounts, int OpenQty, int Closed,
+    List<StatusCount> StatusCounts, List<AttentionItem> Attention,
     PagedResult<SignalAccountExecution> Accounts, List<string> Brokers);

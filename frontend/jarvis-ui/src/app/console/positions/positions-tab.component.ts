@@ -5,6 +5,7 @@ import { ActivatedRoute } from '@angular/router';
 import { interval } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { IconComponent } from '../../shared/icon.component';
+import { TickDirective } from '../../shared/tick.directive';
 import { OpsService } from '../../core/ops.service';
 import {
   AccountDetail, AccountListItem, AutoCloseEntry, CleanupItem, HedgeRecord, InFlightExit, PositionRecord, PositionsTabSummary
@@ -18,7 +19,7 @@ const PRESET_KEY = 'jarvis.positions.detailFilter';
 @Component({
   selector: 'app-positions-tab',
   standalone: true,
-  imports: [IconComponent, DatePipe, DecimalPipe, FormsModule],
+  imports: [IconComponent, TickDirective, DatePipe, DecimalPipe, FormsModule],
   templateUrl: './positions-tab.component.html',
   styleUrl: './positions-tab.component.scss',
 })
@@ -30,7 +31,7 @@ export class PositionsTabComponent {
   brokers = BROKERS;
   sub = signal<Sub>((this.route.snapshot.queryParamMap.get('sub') as Sub) || 'tracking');
   filtersOpen = signal(true);
-  autoRefresh = signal(false);
+  autoRefresh = signal(true);   // demo simulator keeps P&L moving
 
   // top filters
   f = { search: '', broker: '', clientId: '', partnerId: '', openOnly: false };
@@ -88,8 +89,15 @@ export class PositionsTabComponent {
       if (s === 'hedges') this.ops.hedges().subscribe(x => this.hedges.set(x));
       if (s === 'autoclose') this.ops.autoClose().subscribe(x => this.autoClose.set(x));
     });
-    interval(15_000).pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => {
-      if (this.autoRefresh()) { this.loadAccounts(); this.reloadDetail(); }
+    interval(this.state.livePollMs).pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => {
+      if (!this.autoRefresh()) return;
+      this.loadAccounts(); this.reloadDetail();
+      this.ops.positionsSummary().subscribe(s => this.summary.set(s));
+      const s = this.sub();
+      if (s === 'inflight') this.ops.inFlight().subscribe(x => this.inflight.set(x));
+      if (s === 'cleanup') this.ops.cleanup().subscribe(x => this.cleanup.set(x));
+      if (s === 'hedges') this.ops.hedges().subscribe(x => this.hedges.set(x));
+      if (s === 'autoclose') this.ops.autoClose().subscribe(x => this.autoClose.set(x));
     });
   }
 

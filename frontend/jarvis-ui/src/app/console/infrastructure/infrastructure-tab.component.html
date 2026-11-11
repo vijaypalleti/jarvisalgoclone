@@ -9,7 +9,7 @@
       <button class="act indigo" (click)="provisionAll()">⚙ Provision All</button>
       <button class="act danger" (click)="stopAll()">■ Stop All Containers</button>
       <button class="act violet" (click)="provisionAll()">＋ Provision Missing</button>
-      <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh (10s)</label>
+      <label class="chk"><input type="checkbox" [checked]="autoRefresh()" (change)="autoRefresh.set(!autoRefresh())" /> Auto-refresh (3s)</label>
       <span class="last">Last: {{ lastLoaded() ? (lastLoaded() | date: 'h:mm:ss a') : '—' }}</span>
     </div>
   </header>

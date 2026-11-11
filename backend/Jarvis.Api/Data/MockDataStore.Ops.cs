@@ -15,7 +15,8 @@ public partial class MockDataStore
 
     private static readonly string[] OpsBrokers = ["5PAISA", "ANT", "ANT", "ANGELONE", "ZERODHA", "UPSTOX", "FYERS", "SHAREINDIA", "NUBRA"];
     private static readonly string[] Expiries = ["09NOV26", "17NOV26"];
-    private static readonly string[] Strategies = ["S1EN", "S2HD", "DTR", "QIP", "SWL"];
+    /// <summary>Positions are NIFTY options → real NIFTY strategies (Data/Catalog.cs).</summary>
+    private static readonly string[] Strategies = Catalog.For("NIFTY").Select(s => s.Name).ToArray();
 
     private string Hex(int n) => string.Concat(Enumerable.Range(0, n).Select(_ => "0123456789abcdef"[_rng.Next(16)]));
 
@@ -190,6 +191,23 @@ public partial class MockDataStore
 
     // ------------------------------------------------------------------ queries
 
+    /// <summary>"a,b,c" → set (null = all strategies).</summary>
+    public static HashSet<string>? ParseStrategies(string? csv)
+    {
+        var set = (csv ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet(StringComparer.Ordinal);
+        return set.Count == 0 ? null : set;
+    }
+
+    /// <summary>Account row with P&amp;L / position counts limited to the given strategies (null = all).</summary>
+    public static AccountListItem ToListItem(BrokerAccount a, HashSet<string>? strategies)
+    {
+        if (strategies is null) return ToListItem(a);
+        var ps = a.Positions.Where(p => strategies.Contains(p.Strategy)).ToList();
+        decimal r = ps.Sum(p => p.Realized), u = ps.Sum(p => p.Unrealized);
+        return new(a.ClientId, a.Name, a.Broker, a.AccountId, a.Status, a.SessionValid, a.TokenStale,
+            ps.Count(p => p.NetQty != 0), ps.Count(p => p.NetQty == 0), a.Strategies, a.ExcludedStrategies, r + u, r, u);
+    }
+
     public static AccountListItem ToListItem(BrokerAccount a) => new(
         a.ClientId, a.Name, a.Broker, a.AccountId, a.Status, a.SessionValid, a.TokenStale, a.OpenPositions, a.ClosedToday,
         a.Strategies, a.ExcludedStrategies, a.StrategyPnl, a.Realized, a.Unrealized);
@@ -212,14 +230,7 @@ public partial class MockDataStore
     {
         lock (_lock)
         {
-            // small jitter so the dashboard "feels" live on refresh
-            foreach (var c in Containers.Where(c => c.Status == "Running"))
-            {
-                c.CpuPct = Math.Round(Math.Clamp(c.CpuPct + (_rng.NextDouble() - 0.5) * 1.2, 0.5, 95), 1);
-                c.StreamMsgs += _rng.Next(0, 25);
-                c.RedisLatencyMs = Math.Round(0.22 + _rng.NextDouble() * 0.12, 4);
-                c.MongoLatencyMs = Math.Round(0.75 + _rng.NextDouble() * 0.4, 4);
-            }
+            // live movement now comes from the simulator tick (MockDataStore.Sim.cs)
             var running = Containers.Where(c => c.Status == "Running").ToList();
             return new ContainerSummary(
                 Containers.Count, running.Count, Containers.Count - running.Count,

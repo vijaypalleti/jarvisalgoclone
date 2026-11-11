@@ -83,13 +83,10 @@ public class PositionsController(MockDataStore store) : ControllerBase
     {
         lock (store.SyncRoot)
         {
-            var p = store.Accounts.FirstOrDefault(x => x.ClientId == clientId)?.Positions.FirstOrDefault(x => x.Id == positionId);
-            if (p is null) return NotFound();
-            if (p.NetQty == 0) return NoContent();
-            if (p.NetQty > 0) { p.Realized += (p.Ltp - p.AvgBuy) * p.NetQty; p.AvgSell = p.Ltp; p.SellQty = p.BuyQty; }
-            else { p.Realized += (p.AvgSell - p.Ltp) * -p.NetQty; p.AvgBuy = p.Ltp; p.BuyQty = p.SellQty; }
-            p.Unrealized = 0; p.PnlPct = null; p.Side = "FLAT"; p.Status = "CLOSED";
-            p.ClosedAt = MockDataStore.NowIst; p.LatestExitId = $"FORCE-EXIT-{Guid.NewGuid():N}"[..21];
+            var a = store.Accounts.FirstOrDefault(x => x.ClientId == clientId);
+            var p = a?.Positions.FirstOrDefault(x => x.Id == positionId);
+            if (a is null || p is null) return NotFound();
+            store.ClosePosition(a, p);   // records the exit order + closes the trade
             return NoContent();
         }
     }
@@ -104,43 +101,49 @@ public class PerformanceController(MockDataStore store) : ControllerBase
     [HttpGet("summary")]
     public PerformanceSummary Summary(
         [FromQuery] string? basket, [FromQuery] string? partnerId, [FromQuery] string? name, [FromQuery] string? broker,
-        [FromQuery] string sort = "name", [FromQuery] int pageSize = 25)
+        [FromQuery] string sort = "name", [FromQuery] int pageSize = 25, [FromQuery] string? strategies = null)
     {
+        var strat = MockDataStore.ParseStrategies(strategies);   // "B6_BK,S1EN" → only those strategies' positions count
         lock (store.SyncRoot)
         {
             IEnumerable<BrokerAccount> q = store.Accounts;
+            if (strat is not null) q = q.Where(a => a.Positions.Any(p => strat.Contains(p.Strategy)));
             if (!string.IsNullOrWhiteSpace(basket)) q = q.Where(a => a.Basket == basket);
             if (!string.IsNullOrWhiteSpace(partnerId)) q = q.Where(a => a.AccountId.Contains(partnerId, StringComparison.OrdinalIgnoreCase) || a.ClientId == partnerId);
             if (!string.IsNullOrWhiteSpace(name)) q = q.Where(a => a.Name.Contains(name, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(broker)) q = q.Where(a => a.Broker == broker);
-            var scope = q.ToList();
+            var scope = q.Select(a => (a, item: MockDataStore.ToListItem(a, strat))).ToList();
             var page = (sort switch
             {
-                "pnl" => scope.OrderByDescending(a => a.StrategyPnl),
-                "pnl-asc" => scope.OrderBy(a => a.StrategyPnl),
-                _ => scope.OrderBy(a => a.Name),
+                "pnl" => scope.OrderByDescending(x => x.item.StrategyPnl),
+                "pnl-asc" => scope.OrderBy(x => x.item.StrategyPnl),
+                _ => scope.OrderBy(x => x.a.Name),
             }).Take(pageSize).ToList();
             return new PerformanceSummary(
-                page.Sum(a => a.StrategyPnl), page.Count, scope.Count,
-                page.Count(a => a.Status == "Active"), page.Count(a => a.SessionValid),
-                page.Sum(a => a.OpenPositions), page.Select(MockDataStore.ToListItem).ToList());
+                page.Sum(x => x.item.StrategyPnl), page.Count, scope.Count,
+                page.Count(x => x.a.Status == "Active"), page.Count(x => x.a.SessionValid),
+                page.Sum(x => x.item.OpenPositions), page.Select(x => x.item).ToList());
         }
     }
 
     [HttpGet("users/{clientId}")]
-    public ActionResult<UserPerformanceDetail> User(string clientId, [FromQuery] int trades = 45)
+    public ActionResult<UserPerformanceDetail> User(string clientId, [FromQuery] int trades = 45, [FromQuery] string? strategies = null)
     {
+        var strat = MockDataStore.ParseStrategies(strategies);
         lock (store.SyncRoot)
         {
             var a = store.Accounts.FirstOrDefault(x => x.ClientId == clientId);
             if (a is null) return NotFound();
-            var closed = a.Positions.Where(p => p.NetQty == 0).ToList();
+            var positions = strat is null ? a.Positions : a.Positions.Where(p => strat.Contains(p.Strategy)).ToList();
+            var tradeList = strat is null ? a.Trades : a.Trades.Where(t => strat.Contains(t.Strategy)).ToList();
+            var item = MockDataStore.ToListItem(a, strat);
+            var closed = positions.Where(p => p.NetQty == 0).ToList();
             return new UserPerformanceDetail(
-                MockDataStore.ToListItem(a), a.StrategyPnl, a.Realized, a.Unrealized,
-                closed.Count, a.OpenPositions, closed.Count(p => p.Realized > 0), closed.Count(p => p.Realized < 0),
+                item, item.StrategyPnl, item.Realized, item.Unrealized,
+                closed.Count, item.OpenPositions, closed.Count(p => p.Realized > 0), closed.Count(p => p.Realized < 0),
                 MockDataStore.NowIst.AddMinutes(-2),
-                a.Positions.OrderBy(p => p.NetQty == 0).ThenByDescending(p => p.CreatedAt).ToList(),
-                a.Trades.Take(trades).ToList(), a.Trades.Count);
+                positions.OrderBy(p => p.NetQty == 0).ThenByDescending(p => p.CreatedAt).ToList(),
+                tradeList.Take(trades).ToList(), tradeList.Count);
         }
     }
 }

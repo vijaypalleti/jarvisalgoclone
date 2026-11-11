@@ -35,13 +35,8 @@
       </label>
       <label class="w">
         <span class="label-caps">Strategy</span>
-        <span class="sel">
-          <select class="input" [(ngModel)]="form.strategy">
-            <option value="">All Strategies</option>
-            @for (s of strategies(); track s) { <option [value]="s">{{ s }}</option> }
-          </select>
-          <span class="cnt">{{ strategies().length }}</span>
-        </span>
+        <app-multi-select [options]="strategyOptions()" [selected]="strategySel()" noun="strategies" allLabel="All Strategies"
+                          (applied)="setStrategies($event)" />
       </label>
       <div class="factions">
         <button class="btn sm" (click)="apply()">Apply</button>
@@ -59,65 +54,90 @@
 <div class="quick-row">
   <div class="quick">
     @for (q of quickFilters; track q.key) {
-      <button [class.active]="quick() === q.key" (click)="quick.set(q.key)">{{ q.label }}</button>
+      <button [class.active]="quick() === q.key" [class.attn]="q.key === 'attention'" (click)="quick.set(q.key)">
+        @if (q.key === 'attention') { ⚠ }{{ q.label }}
+        @if (q.key === 'attention') { <span class="qcnt">{{ data()?.attentionCount ?? 0 }}</span> }
+      </button>
     }
   </div>
   <span class="open-entry"><app-icon name="send" [size]="12" /> Open entry signals <b>{{ data()?.openEntrySignals ?? 0 }}</b></span>
 </div>
 
 <div class="list-head">
-  <h3>Recent Signals <small>{{ (data()?.total ?? 0) | number }} signal(s)</small></h3>
+  <h3>Recent Signals <small>{{ (data()?.total ?? 0) | number }} signal(s) · showing {{ data()?.items?.length ?? 0 }}</small></h3>
   <div class="sort">
     <button class="btn primary send" title="Manual signal entry — not wired yet"><app-icon name="send" [size]="13" />Send Signal</button>
-    <span class="muted">Sort (this page):</span>
+    <div class="viewtog" title="Row density">
+      <button [class.on]="view() === 'cards'" (click)="setView('cards')"><app-icon name="layers" [size]="12" /> Cards</button>
+      <button [class.on]="view() === 'compact'" (click)="setView('compact')"><app-icon name="list" [size]="12" /> Compact</button>
+    </div>
+    <span class="muted" title="Sorted on the server across all matching signals">Sort:</span>
     @for (s of sorts; track s.key) {
       <button class="btn sm" [class.on]="sort() === s.key" (click)="sort.set(s.key)">{{ s.label }}@if (sort() === s.key) { ▼ }</button>
     }
   </div>
 </div>
 
-<div class="signals" [class.loading]="loading()">
-  @for (s of data()?.items ?? []; track s.id) {
-    <article class="sig" (click)="selected.set(s)">
-      <div class="r1">
-        <span class="time mono">{{ s.reachedApiAt | date: 'HH:mm:ss.SSS' }}</span>
-        <div class="sym">
-          <strong>{{ s.symbol }}</strong>
-          <small>{{ s.exchange }} · {{ s.segment }} · #{{ s.strategyRef }}</small>
-        </div>
-        <span class="pill red side">{{ s.side }}</span>
-        <span class="pill blue type">{{ s.type }}</span>
-        @if (s.errors > 0) { <span class="pill red err"><app-icon name="alert-triangle" [size]="11" /> {{ s.errors }} Errors</span> }
-        <div class="progress">
-          <div class="bar"><div class="fill" [style.width.%]="pct(s)"></div><div class="exit" [style.width.%]="exitPct(s)"></div></div>
-          <div class="ptext">
-            {{ s.filled | number }} of {{ s.requested | number }} filled · {{ s.exited | number }} exited
-            @if (s.rejectedOrUnfilled > 0) { · {{ s.rejectedOrUnfilled | number }} rejected/unfilled }
+<div class="signals" [class.loading]="loading()" [class.compact]="view() === 'compact'">
+  @for (g of groups(); track g.key) {
+    @if (g.label) { <div class="day">{{ g.label }} <small>{{ g.items.length }} signal(s)</small></div> }
+
+    @for (s of g.items; track s.id) {
+      @let b = badge(s);
+      @let seg = segments(s);
+      @let ex = exitStep(s);
+      <article class="sig" [class.attn]="s.needsAttention" [class.residual]="s.health === 'residual'" (click)="selected.set(s)">
+        <div class="r1">
+          <span class="time mono">{{ s.reachedApiAt | date: 'HH:mm:ss.SSS' }}</span>
+          <div class="sym">
+            <strong>{{ s.symbol }}</strong>
+            <small>
+              <span class="side" [class.sell]="s.side === 'SHORT' || s.side === 'SELL'">{{ s.side === 'SHORT' || s.side === 'SELL' ? '▼' : '▲' }} {{ s.side }}</span>
+              · {{ s.type }} · {{ s.exchange }} · #{{ s.strategyRef }}
+            </small>
           </div>
-          @if (s.hedge; as h) {
-            <div class="ptext">⛨ hedge buy {{ h.buyFilled | number }} / {{ h.buyRequested | number }} · sell {{ h.sellFilled }} / {{ h.sellRequested }} · {{ h.open | number }} open</div>
-          }
+
+          <div class="progress" [title]="seg.tip">
+            <div class="seg">
+              <i class="s-ex" [style.width.%]="seg.exited"></i><i class="s-open" [style.width.%]="seg.open"></i><i class="s-unf" [style.width.%]="seg.unfilled"></i>
+            </div>
+            <div class="ptext">
+              <span><b class="g">{{ s.exited | number }}</b> exited</span>
+              @if (s.openQty > 0) { · <span><b class="bl">{{ s.openQty | number }}</b> open</span> }
+              @if (s.rejectedOrUnfilled > 0) { · <span><b class="r">{{ s.rejectedOrUnfilled | number }}</b> unfilled</span> }
+              · of {{ s.requested | number }}
+              @if (s.chunksTotal > 0) { <span class="chunks">⧉ {{ s.chunksDone }}/{{ s.chunksTotal }} chunks</span> }
+              @if (s.hedge; as h) { <span class="hedge">⛨ hedge {{ h.buyFilled | number }}/{{ h.buyRequested | number }}</span> }
+            </div>
+          </div>
+
+          <div class="counts">
+            <span><b>{{ s.closedAccounts }}/{{ s.totalAccounts }}</b> closed</span>
+            @if (s.residualAccounts > 0) { <span class="pill red tiny">{{ s.residualAccounts }} residual</span> }
+            @else if (s.openAccounts > 0) { <small>{{ s.openAccounts }} open</small> }
+          </div>
+          <span class="badge" [class]="b.tone" [title]="s.recordedExitStatus !== s.exitStatus ? 'OMS recorded: ' + s.recordedExitStatus : ''">
+            <i>{{ b.icon }}</i>{{ b.label }}
+          </span>
+          <span class="play"><app-icon name="play" [size]="11" /></span>
         </div>
-        <div class="counts">
-          <span>{{ s.openAccounts }} open / {{ s.closedAccounts }}</span>
-          <span>closed · {{ s.totalAccounts }} total</span>
+
+        <div class="r2">
+          <span class="step ok" [title]="'Entry correlation ' + s.correlationId + ' — click to copy'" (click)="copy(s.correlationId, $event)">
+            <i>✓</i> Entry <code>{{ s.correlationId.slice(0, 8) }}</code>
+          </span>
+          <span class="arr">→</span>
+          <span class="step" [class]="ex.tone" [title]="s.exitCorrelationId ? 'Exit correlation ' + s.exitCorrelationId + ' — click to copy' : 'No exit sent yet'"
+                (click)="copy(s.exitCorrelationId, $event)">
+            <i>{{ ex.icon }}</i> {{ ex.text }} @if (s.exitCorrelationId) { <code>{{ s.exitCorrelationId.slice(0, 8) }}</code> }
+          </span>
+          <span class="tag" [title]="s.strategyName + ' — click to copy'" (click)="copy(s.strategyName, $event)">tag {{ s.strategyName }}</span>
+          <span class="lifecycle"><app-icon name="history" [size]="11" /> Lifecycle</span>
         </div>
-        <span class="pill green status" [class.gray]="s.status !== 'Open'">{{ s.status }}</span>
-        <span class="play"><app-icon name="play" [size]="11" /></span>
-      </div>
-      <div class="r2">
-        <span class="kind">{{ s.type | uppercase }}</span>
-        <span class="mono strat">{{ s.strategyName }}</span>
-        <span class="arr">→</span>
-        <span class="pill green">{{ s.status }}</span>
-        <span class="arr">→</span>
-        <span class="pill" [class.outline-orange]="s.exitStatus !== 'EXIT COMPLETED'" [class.green]="s.exitStatus === 'EXIT COMPLETED'">{{ s.exitStatus }}</span>
-        <span class="arr">–</span>
-        <span class="lifecycle"><app-icon name="history" [size]="11" /> Lifecycle</span>
-      </div>
-    </article>
+      </article>
+    }
   } @empty {
-    <div class="card placeholder">{{ loading() ? 'Loading signals…' : 'No signals match these filters.' }}</div>
+    <div class="card placeholder">{{ loading() ? 'Loading signals…' : quick() === 'attention' ? 'Nothing needs attention — every signal is clean. ✓' : 'No signals match these filters.' }}</div>
   }
 </div>
 }

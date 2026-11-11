@@ -8,12 +8,14 @@
 }
 
 /* ======================================================================= hub layout
-   Proportions matched to the reference at equal zoom: 272px × ~78px tiles, 10px gaps,
-   154px core, ~30px gutters → short rails. */
+   Fluid like the reference: the tile columns share the card's width (min 240px each), the core stays
+   154px, and the gutters grow a little with the card, so the rails lengthen. Zooming out / wider
+   screens → wider tiles instead of empty margins. Rails re-draw via the ResizeObserver in the TS. */
 .hub {
   position: relative; padding: 24px 20px;
-  display: grid; grid-template-columns: 272px 154px 272px; column-gap: 30px;
-  justify-content: center; align-items: center;
+  display: grid; grid-template-columns: minmax(240px, 1fr) 154px minmax(240px, 1fr);
+  column-gap: clamp(30px, 4%, 64px);
+  align-items: center;
 }
 .col { display: flex; flex-direction: column; gap: 10px; position: relative; z-index: 1; }
 
@@ -193,7 +195,7 @@
 }
 
 /* ======================================================================= hub shell + bottom row */
-.hub-shell { padding: 0; overflow: hidden; }
+.hub-shell { padding: 0; overflow: hidden; overflow-x: auto; }   /* very narrow card: scroll instead of squashing tiles */
 .hub-bottom {
   display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 0 16px 16px;
   @media (max-width: 1500px) { grid-template-columns: 1fr; }

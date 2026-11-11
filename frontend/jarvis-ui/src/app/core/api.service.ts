@@ -32,9 +32,15 @@ export class ApiService {
   brokerSessions() { return this.http.get<BrokerSessionHealth>(`${BASE}/broker-sessions`); }
 
   signals(q: SignalQuery) { return this.http.get<SignalListResponse>(`${BASE}/signals`, { params: toParams(q) }); }
-  signalFilters() { return this.http.get<{ baskets: string[]; strategies: string[] }>(`${BASE}/signals/filters`); }
+  signalFilters() { return this.http.get<{ baskets: string[]; strategies: string[]; strategyCatalog: { name: string; code: string; basket: string }[] }>(`${BASE}/signals/filters`); }
   signalDetail(id: number, q: { client?: string; account?: string; broker?: string; status?: string; page?: number; pageSize?: number }) {
     return this.http.get<SignalDetailResponse>(`${BASE}/signals/${id}`, { params: toParams(q) });
   }
   forceExit(id: number) { return this.http.post<void>(`${BASE}/signals/${id}/force-exit`, {}); }
+  exitRemaining(id: number, clientId: string) {
+    return this.http.post<void>(`${BASE}/signals/${id}/accounts/${encodeURIComponent(clientId)}/exit-remaining`, {});
+  }
+  retryChunk(id: number, clientId: string, index: number) {
+    return this.http.post<void>(`${BASE}/signals/${id}/accounts/${encodeURIComponent(clientId)}/chunks/${index}/retry`, {});
+  }
 }

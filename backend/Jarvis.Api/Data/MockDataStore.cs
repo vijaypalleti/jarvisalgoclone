@@ -24,7 +24,14 @@ public partial class MockDataStore
     private static readonly string[] FirstNames = ["Arjun", "Kavya", "Rohan", "Meera", "Vikram", "Ananya", "Siddharth", "Priya", "Karthik", "Divya", "Rahul", "Sneha", "Aditya", "Lakshmi", "Nikhil"];
     private static readonly string[] LastNames = ["Rao", "Sharma", "Iyer", "Reddy", "Nair", "Gupta", "Menon", "Verma", "Kulkarni", "Joshi"];
     private static readonly string[] Plans = ["DTR", "Quad Instrument Plan", "Spider Man", "Index Pro", "Weekly Hedge"];
-    private static readonly string[] Baskets = ["SWL_SENSEX", "MS_SENSEX", "SWL_NIFTY", "MS_NIFTY", "BNF_WEEKLY", "FIN_HEDGE"];
+    private static readonly string[] Baskets = Catalog.BasketNames;   // real basket names (Data/Catalog.cs)
+
+    /// <summary>A real strategy that trades this symbol's underlying (NIFTY / BANKNIFTY / SENSEX).</summary>
+    private StrategyInfo PickStrategy(string symbol)
+    {
+        var list = Catalog.For(Catalog.UnderlyingOf(symbol));
+        return list[_rng.Next(list.Length)];
+    }
 
     public MockDataStore()
     {
@@ -33,6 +40,7 @@ public partial class MockDataStore
         SeedSubscriptions();
         SeedSessions();
         SeedOps();
+        SeedChunksAndResiduals();
     }
 
     // ------------------------------------------------------------------ seeding
@@ -93,7 +101,8 @@ public partial class MockDataStore
             {
                 var inst = instruments[_rng.Next(instruments.Length)];
                 var t = day.AddHours(9).AddMinutes(15).AddSeconds(_rng.Next(0, 6 * 3600 + 15 * 60));
-                var basket = inst.sym.StartsWith("SENSEX") ? Pick(["SWL_SENSEX", "MS_SENSEX"]) : Pick(Baskets);
+                var strat = PickStrategy(inst.sym);
+                var basket = strat.Basket;
                 var isEntry = _rng.NextDouble() < 0.8;
                 var withHedgeIssues = _rng.NextDouble() < 0.3;
 
@@ -159,7 +168,7 @@ public partial class MockDataStore
                     Exchange = inst.exch,
                     Segment = "S1EN",
                     StrategyRef = 1134400 + _rng.Next(0, 100),
-                    StrategyName = basket + "_" + (inst.sym.Contains("PE") ? "PE" : "CE"),
+                    StrategyName = strat.Name,
                     Basket = basket,
                     Side = "SHORT",
                     Type = isEntry ? "entry" : "exit",
@@ -269,7 +278,7 @@ public partial class MockDataStore
                 RangeTo: DateOnly.FromDateTime(today),
                 DeadLettersInRange: 705,
                 FailedExecutionsInRange: 4702,
-                Relay: new RelayStatus(true, 100, 83, 2.4, null),
+                Relay: new RelayStatus(true, 100, Math.Round(_execPct, 1), Math.Round(_dlqPct, 1), null),
                 StrategyPerformance: new(31, 13, 18),
                 UserPerformance: new(Accounts.Count * 2, Accounts.Count),
                 Containers: new(running, Containers.Count, healthy, Containers.Count - healthy),
@@ -278,7 +287,7 @@ public partial class MockDataStore
                 PositionTracking: new(positions.Count, positions.Count(p => p.CreatedAt.Date == today), positions.Count(p => p.ClosedAt?.Date == today), Accounts.Count),
                 LogsErrors: new(errors, errors, 23),
                 Brokers: new(0, 0),
-                Health: new(93),
+                Health: new(_successRate),
                 Sessions: new(sessionsValid, Accounts.Count, Accounts.Count - sessionsValid, 0),
                 Subscriptions: new(
                     Subscriptions.Count(s => s.EndsAt <= subsNow.AddDays(7)),
@@ -288,8 +297,83 @@ public partial class MockDataStore
         }
     }
 
+    /// <summary>Status/ExitStatus in the DTO are the *effective* (worst-account) values; the recorded one is kept separately.</summary>
     public static SignalListItem ToListItem(Signal s) => new(
         s.Id, s.ReachedApiAt, s.Symbol, s.Exchange, s.Segment, s.StrategyRef, s.StrategyName, s.Side, s.Type,
-        s.Status, s.ExitStatus, s.Errors, s.Requested, s.Filled, s.Exited, s.RejectedOrUnfilled, s.HedgeRollup,
-        s.OpenAccounts, s.ClosedAccounts, s.TotalAccounts, s.CorrelationId);
+        s.EffectiveStatus, s.EffectiveExitStatus, s.Errors, s.Requested, s.Filled, s.Exited, s.RejectedOrUnfilled, s.HedgeRollup,
+        s.OpenAccounts, s.ClosedAccounts, s.TotalAccounts, s.CorrelationId,
+        s.ExitCorrelationId, s.ExitStatus, s.Health, s.NeedsAttention,
+        s.ResidualQty, s.ResidualAccounts, s.AnomalyCount, s.ChunksDone, s.ChunksTotal, s.Filled - s.Exited, s.UnresolvedIssues);
+
+    /// <summary>
+    /// Runs after all other seeding (so the earlier deterministic data is unchanged): gives some signals chunked exit
+    /// orders and plants the real-world failure seen in production — exit recorded as "completed" while one account
+    /// still holds a residual, with a chunk the broker marked COMPLETED at 0 fill and no broker order id.
+    /// </summary>
+    private void SeedChunksAndResiduals()
+    {
+        foreach (var s in Signals)
+        {
+            if (s.ExitSent) s.ExitCorrelationId ??= Guid.NewGuid().ToString("N");
+            if (!s.Chunked || s.Exited == 0) continue;
+
+            foreach (var a in s.Accounts.Where(a => a.Exit >= 40))
+                a.ChunkOrders = SplitChunks(a.Exit, OrderId());
+        }
+
+        // ~6% of exited signals get one account with a stuck last chunk
+        foreach (var s in Signals.Where(x => x.ExitSent && x.Exited > 0).Where(_ => _rng.NextDouble() < 0.06))
+        {
+            var a = s.Accounts.Where(x => x.Exit >= 40 && x.Hedge is null).OrderBy(_ => _rng.Next()).FirstOrDefault();
+            if (a is null) continue;
+            s.Chunked = true;
+            var chunks = SplitChunks(a.Exit, OrderId());
+            var last = chunks[^1];
+            last.Fill = 0; last.BrokerOrder = null; last.Modify = null;   // recorded COMPLETED + EXECUTED, but nothing traded
+            last.Reason = "Order closed at broker without fills (IOC expired / RMS cancel)";
+            chunks[0].Attempts = 2; chunks[0].Modify = 1;
+            a.ChunkOrders = chunks;
+            a.Exit -= last.Req;
+            a.OrderStatus = "PARTIAL";
+            a.PartialReason = $"Exit chunk {chunks.Count}/{chunks.Count} not filled — {last.Req} qty still open at broker";
+        }
+    }
+
+    private List<ChunkOrder> SplitChunks(int qty, string firstOrder)
+    {
+        var n = qty >= 120 ? 3 : 2;
+        var size = qty / n;
+        return Enumerable.Range(1, n).Select(i =>
+        {
+            var req = i == n ? qty - size * (n - 1) : size;
+            return new ChunkOrder { Index = i, Req = req, Fill = req, BrokerOrder = i == 1 ? firstOrder : OrderId() };
+        }).ToList();
+    }
+
+    /// <summary>Square off an account's residual: fill every unfilled chunk (or the whole open qty).</summary>
+    public bool ExitRemaining(Signal s, SignalAccountExecution a)
+    {
+        if (a.NetOpen <= 0) return false;
+        foreach (var c in a.ChunkOrders.Where(c => c.Fill < c.Req))
+        { c.Fill = c.Req; c.Attempts++; c.BrokerOrder ??= OrderId(); c.BrokerStatus = "COMPLETED"; c.Reason = null; }
+        a.Exit = a.Fill;
+        a.AvgExit ??= a.AvgEntry;
+        a.OrderStatus = "COMPLETED";
+        a.PartialReason = null;
+        if (s.Accounts.All(x => x.NetOpen == 0)) { s.Status = "Closed"; s.ExitStatus = "EXIT COMPLETED"; }
+        return true;
+    }
+
+    /// <summary>Retry one chunk: re-place it at the broker and fill it.</summary>
+    public bool RetryChunk(Signal s, SignalAccountExecution a, int index)
+    {
+        var c = a.ChunkOrders.FirstOrDefault(x => x.Index == index);
+        if (c is null || c.Fill >= c.Req) return false;
+        var add = c.Req - c.Fill;
+        c.Fill = c.Req; c.Attempts++; c.BrokerOrder = OrderId(); c.BrokerStatus = "COMPLETED"; c.Reason = null;
+        a.Exit = Math.Min(a.Fill, a.Exit + add);
+        if (a.NetOpen == 0 || a.ChunkOrders.All(x => x.Fill >= x.Req)) { a.OrderStatus = "COMPLETED"; a.PartialReason = null; }
+        if (s.Accounts.All(x => x.NetOpen == 0)) { s.Status = "Closed"; s.ExitStatus = "EXIT COMPLETED"; }
+        return true;
+    }
 }
