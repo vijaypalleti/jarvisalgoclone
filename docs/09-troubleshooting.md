@@ -117,6 +117,31 @@ git config user.name  "Vijay Palleti"
 git config user.email "pvijaypvijay3333@gmail.com"
 ```
 
+## AI assistant
+
+### "The assistant is not configured"
+Set the key: `dotnet user-secrets set "Groq:ApiKey" "<key>"` in `backend/Jarvis.Api`, then restart the API.
+
+### "Groq limit reached (daily token limit …). Try again in N min"
+**Cause:** the **daily** token allowance (e.g. 200,000 tokens/day for gpt-oss-20b) is used up, on every key and every fallback model. Keys from the same Groq account share it.
+**Fix:** wait (it's a rolling 24 h window), keep the fallback models configured (`Groq:FallbackModels`) since each has its own allowance, or upgrade the Groq tier. Check `GET /api/assistant/status` to see which key or model is cooling and until when.
+
+### Answers are slow (5–15 s) when asking many questions quickly
+**Cause:** Groq's free tier allows about 8,000 tokens per minute. The API waits the time Groq asks for and retries, which adds a few seconds.
+**Fix:** ask a little slower, or upgrade to Groq's Dev Tier.
+
+### "Groq rejected the API key"
+The key is wrong or was revoked. Create a new one in the Groq console and set it again.
+
+### Voice: "Jarvis" does nothing / no mic button
+- Use **Chrome or Edge**; Firefox has no speech recognition, so the mic and wake-word buttons are hidden.
+- Turn the wake word on (◎ → ◉ in the chat header) and allow the **microphone** when asked. If you blocked it: click the padlock in the address bar → Microphone → Allow, then reload.
+- The page must be served from `localhost` or HTTPS; browsers block the mic on plain-HTTP remote addresses.
+- "Microphone permission was denied" in the chat → same fix as above.
+
+### Voice: the answer isn't spoken
+Check the system volume and output device. Some browsers need one click on the page before audio can play, so click anywhere once after loading.
+
 ## Overview hub
 
 ### Rails don't touch the tiles after zooming (shifted sideways)
@@ -131,3 +156,14 @@ git config user.email "pvijaypvijay3333@gmail.com"
 | `@else if (x; as y)` is not allowed in Angular 19 | Use `@let y = x;` before the block |
 | A `<select [value]>` shows the first option instead of the bound one | Bind `[selected]` on each `<option>` instead |
 | Styles bleed between `.sm` and `.btn.sm` | Use distinct class names (`.tiny`, `.w120`) |
+
+### SQL queries are very slow (30–90 s) or the persisters fall behind
+**Cause:** SQL Express is short of memory. When Windows has little free RAM (WSL, Chrome, VS Code, SSMS, ng serve…), SQL Server shrinks its cache. Queries that sort or group, and the app's bulk inserts, then wait on `RESOURCE_SEMAPHORE` (a memory grant).
+**Check:** `SELECT session_id, wait_type FROM sys.dm_exec_requests WHERE wait_type = 'RESOURCE_SEMAPHORE'`, and `SELECT process_physical_memory_low FROM sys.dm_os_process_memory` (1 = under pressure).
+**Fix:** close what you don't need, or let SQL keep a floor of memory:
+```sql
+EXEC sp_configure 'show advanced options', 1; RECONFIGURE;
+EXEC sp_configure 'min server memory (MB)', 1024; RECONFIGURE;
+```
+Optionally cap WSL in `%USERPROFILE%\.wslconfig` (`[wsl2]` then `memory=2GB`). When writing your own queries, sort `DeltaTrades` by `Id` (indexed) and filter the `v*` views by `EventTime`.
+

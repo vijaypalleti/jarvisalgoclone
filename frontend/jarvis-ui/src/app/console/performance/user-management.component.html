@@ -1,0 +1,185 @@
+
+@if (svc.ws(); as w) {
+@let u = w.user;
+
+<!-- ================= user header ================= -->
+<section class="card uhead">
+  <span class="av big">{{ initials(u.name) }}</span>
+  <div class="uh">
+    <h2>{{ u.name }} <span class="pill" [class.green]="u.status === 'Active'" [class.gray]="u.status !== 'Active'">{{ u.status }}</span></h2>
+    <div class="meta"><span>✉ {{ u.email }}</span><span>☎ {{ u.mobile }}</span><span class="mono">User #{{ u.id }}</span></div>
+  </div>
+  <button class="btn" (click)="svc.close()">⇄ Switch user</button>
+</section>
+
+<div class="jumprow">
+  <span class="label-caps">Jump to</span>
+  <button class="chipbtn" (click)="jump('details')"><app-icon name="user" [size]="12" /> User Details</button>
+  <button class="chipbtn" (click)="jump('brokers')"><app-icon name="briefcase" [size]="12" /> Broker Accounts</button>
+  <button class="chipbtn" (click)="jump('subs')"><app-icon name="package" [size]="12" /> Basket Subscriptions</button>
+  <button class="chipbtn" (click)="jump('baskets')"><app-icon name="basket" [size]="12" /> Baskets</button>
+  <span class="sp"></span>
+  <button class="chipbtn" (click)="toggleAll()"><app-icon name="layers" [size]="12" /> {{ allOpen() ? 'Collapse all' : 'Expand all' }}</button>
+</div>
+
+<!-- ================= user details ================= -->
+<section class="card sec" id="um-details">
+  <header (click)="toggle('details')">
+    <span class="chev" [class.open]="open().details">▸</span>
+    <span class="sico violet"><app-icon name="user" [size]="16" /></span>
+    <div><h3>User Details</h3><small>{{ u.status }} · {{ u.publicIp ? 'IP ' + u.publicIp : 'No static IP' }}</small></div>
+  </header>
+  @if (open().details) {
+    <div class="sbody">
+      <div class="btnrow">
+        <button class="btn primary" (click)="svc.editUser()"><app-icon name="square-pen" [size]="13" /> Edit user</button>
+        <button class="btn" (click)="svc.demoOnly('IP configuration')"><app-icon name="share" [size]="13" /> IP configuration</button>
+        <button class="btn" [class.danger]="u.status === 'Active'" [class.ok]="u.status !== 'Active'" (click)="svc.toggleUserStatus()">
+          <app-icon [name]="u.status === 'Active' ? 'ban' : 'check-circle'" [size]="13" /> {{ u.status === 'Active' ? 'Deactivate user' : 'Activate user' }}
+        </button>
+      </div>
+      <div class="kvgrid">
+        <div><span>Full name</span><b>{{ u.name }}</b></div>
+        <div><span>Email</span><b>{{ u.email }}</b></div>
+        <div><span>Mobile</span><b>{{ u.mobile }}</b></div>
+        <div><span>Role</span><b>{{ u.role }}</b></div>
+        <div><span>Status</span><b><span class="pill" [class.green]="u.status === 'Active'" [class.gray]="u.status !== 'Active'">{{ u.status }}</span></b></div>
+        <div><span>User ID</span><b>#{{ u.id }}</b></div>
+        <div><span>Public static IP</span><b class="mono">{{ u.publicIp ?? '—' }}</b></div>
+        <div><span>Private IP</span><b class="mono">{{ u.privateIp ?? '—' }}</b></div>
+        <div><span>Username</span><b>{{ u.username ?? '—' }}</b></div>
+        <div><span>Referral code</span><b>{{ u.referralCode ?? '—' }}</b></div>
+        <div><span>Created</span><b>{{ u.created ? (u.created | date: 'dd MMM yyyy') : '—' }}</b></div>
+        <div><span>Last modified</span><b>{{ u.lastModified | date: 'dd MMM yyyy, HH:mm' }}</b></div>
+      </div>
+    </div>
+  }
+</section>
+
+<!-- ================= broker accounts ================= -->
+<section class="card sec" id="um-brokers">
+  <header (click)="toggle('brokers')">
+    <span class="chev" [class.open]="open().brokers">▸</span>
+    <span class="sico slate"><app-icon name="briefcase" [size]="16" /></span>
+    <div><h3>Broker Accounts</h3><small>{{ plural(svc.brokerRows().length, 'account') }} · {{ loggedIn() }} logged in today · {{ algoOn() }} algo-enabled</small></div>
+  </header>
+  @if (open().brokers) {
+    <div class="sbody">
+      <div class="btnrow">
+        <button class="btn" (click)="svc.refresh()"><app-icon name="refresh" [size]="12" /> Refresh</button>
+        <span class="muted note">Login opens the broker's login page, the same way Settings does, then brings you back. (Not available in the demo.)</span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Broker</th><th>Client ID</th><th>Username</th><th>Session</th><th class="n">Lot</th><th>Algo</th><th>Account</th><th>Actions</th></tr></thead>
+        <tbody>
+          @for (a of svc.brokerRows(); track a.clientId) {
+            <tr [class.dim]="!a.active">
+              <td><span class="bpill">{{ a.broker }}</span></td>
+              <td class="mono">{{ a.accountId }}</td>
+              <td>{{ a.username }}</td>
+              <td><span class="pill" [class.green]="a.session === 'Logged in'" [class.gray]="a.session !== 'Logged in'">{{ a.session }}</span></td>
+              <td class="n mono">{{ a.lot }}</td>
+              <td><span class="pill" [class.green]="a.algoOn" [class.gray]="!a.algoOn">{{ a.algoOn ? 'On' : 'Off' }}</span></td>
+              <td><span class="pill" [class.green]="a.active" [class.red]="!a.active">{{ a.active ? 'Active' : 'Inactive' }}</span></td>
+              <td><div class="acts">
+                <button class="btn sm primary" (click)="svc.demoOnly('Broker login')">🔑 Login</button>
+                <button class="btn sm" (click)="svc.demoOnly('Broker credentials')">🔒 Credentials</button>
+                <button class="btn sm" (click)="svc.setLot(a)" [disabled]="svc.busy()">📐 Lot</button>
+                <button class="btn sm" (click)="svc.setAlgo(a)" [disabled]="svc.busy()">{{ a.algoOn ? '⏸ Algo off' : '▶ Algo on' }}</button>
+                <button class="btn sm" [class.danger]="a.active" [class.ok]="!a.active" (click)="svc.toggleAccount(a)" [disabled]="svc.busy()">{{ a.active ? '⛔ Deactivate' : '✓ Activate' }}</button>
+              </div></td>
+            </tr>
+          } @empty { <tr><td colspan="8" class="empty">No broker accounts.</td></tr> }
+        </tbody>
+      </table></div>
+    </div>
+  }
+</section>
+
+<!-- ================= basket subscriptions ================= -->
+<section class="card sec" id="um-subs">
+  <header (click)="toggle('subs')">
+    <span class="chev" [class.open]="open().subs">▸</span>
+    <span class="sico amber"><app-icon name="package" [size]="16" /></span>
+    <div><h3>Basket Subscriptions</h3><small>{{ plural(svc.subRows().length, 'subscription') }} · {{ activeSubs() }} active</small></div>
+  </header>
+  @if (open().subs) {
+    <div class="sbody">
+      <div class="btnrow">
+        <button class="btn primary" (click)="svc.addSub()" [disabled]="svc.busy()">＋ Add subscription</button>
+        <button class="btn" (click)="svc.refresh()"><app-icon name="refresh" [size]="12" /> Refresh</button>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Basket</th><th>Plan</th><th>Broker account</th><th class="n">Multiplier</th><th>Period</th><th class="n">Days left</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          @for (s of svc.subRows(); track s.id) {
+            <tr [class.dim]="s.status !== 'Active'">
+              <td><b>{{ s.basket }}</b><small class="sub">{{ plural(s.basketStrategies, 'strategy') }}</small></td>
+              <td>{{ s.plan }}<small class="sub">{{ s.months }} month(s)</small></td>
+              <td class="mono">{{ svc.accLabel(s.clientId) }}</td>
+              <td class="n mono">{{ s.multiplier }}×</td>
+              <td class="mono">{{ s.start | date: 'dd MMM yy' }} → {{ s.end | date: 'dd MMM yy' }}</td>
+              <td class="n mono" [class.warnc]="s.daysLeft <= 7">{{ s.daysLeft }}</td>
+              <td><span class="pill" [class.green]="s.status === 'Active'" [class.amber]="s.status === 'Paused'" [class.red]="s.status === 'Cancelled' || s.status === 'Expired'" [class.gray]="s.status === 'Inactive'">{{ s.status }}</span></td>
+              <td><div class="acts">
+                <button class="btn sm" (click)="svc.editSub(s)" [disabled]="svc.busy() || s.status === 'Cancelled'">✎ Edit</button>
+                <button class="btn sm" (click)="svc.subAction(s, 'extend')" [disabled]="svc.busy() || s.status === 'Cancelled'">📅 Extend</button>
+                @if (s.status === 'Active') { <button class="btn sm" (click)="svc.subAction(s, 'pause')" [disabled]="svc.busy()">⏸ Pause</button> }
+                @else if (s.status !== 'Cancelled') { <button class="btn sm ok" (click)="svc.subAction(s, 'activate')" [disabled]="svc.busy()">✓ Activate</button> }
+                @if (s.status !== 'Cancelled') { <button class="btn sm danger" (click)="svc.subAction(s, 'cancel')" [disabled]="svc.busy()">✕ Cancel</button> }
+              </div></td>
+            </tr>
+          } @empty { <tr><td colspan="8" class="empty">No subscriptions.</td></tr> }
+        </tbody>
+      </table></div>
+    </div>
+  }
+</section>
+
+<!-- ================= baskets ================= -->
+<section class="card sec" id="um-baskets">
+  <header (click)="toggle('baskets')">
+    <span class="chev" [class.open]="open().baskets">▸</span>
+    <span class="sico orange"><app-icon name="basket" [size]="16" /></span>
+    <div><h3>Baskets</h3><small>{{ plural(svc.basketRows().length, 'basket') }} · {{ multipliers().length === 1 ? 'all on ' + multipliers()[0] + '×' : 'mixed multipliers' }} · configuration read-only</small></div>
+  </header>
+  @if (open().baskets) {
+    <div class="sbody">
+      @for (b of svc.basketRows(); track b.basket) {
+        <div class="bcard">
+          <div class="bh">
+            <b>{{ b.basket }}</b>
+            <span class="pill" [class.green]="b.status === 'Active'" [class.gray]="b.status !== 'Active'">{{ b.status }}</span>
+            <span class="bk">{{ b.broker }}</span>
+            <span class="sp"></span>
+            <span class="label-caps">This user's multiplier</span> <b class="mult">{{ b.multiplier }}×</b>
+            <button class="btn sm" (click)="svc.changeBasketMult(b.basket, b.multiplier)" [disabled]="svc.busy()">✎ Change</button>
+          </div>
+          <div class="table-wrap"><table>
+            <thead><tr><th>Strategy</th><th class="n">Lot size</th><th class="n">Mult</th><th class="n">CE</th><th class="n">PE</th><th>Product</th><th class="n">Dispatched qty</th></tr></thead>
+            <tbody>
+              @for (s of b.strategies; track s.strategy) {
+                <tr>
+                  <td>{{ s.strategy }} <small class="code">{{ s.code }}</small></td>
+                  <td class="n mono">{{ s.lotSize }}</td><td class="n mono">{{ s.mult }}</td>
+                  <td class="n mono">{{ s.ce }}</td><td class="n mono">{{ s.pe }}</td><td>{{ s.product }}</td>
+                  <td class="n mono disp">
+                    <b>CE {{ s.dispatchCe ?? '—' }}</b><b>PE {{ s.dispatchPe ?? '—' }}</b>
+                  </td>
+                </tr>
+              } @empty { <tr><td colspan="7" class="empty">No strategies in this basket.</td></tr> }
+            </tbody>
+          </table></div>
+        </div>
+      } @empty { <div class="empty">No baskets: this user has no active or paused subscriptions.</div> }
+      @if (svc.basketRows().length) {
+        <p class="explain">
+          <b>Dispatched qty</b> is what the OMS would send for this user: <code>multiplier × (lot size × strategy multiplier)</code>, times the CE/PE leg value, truncated to a whole number.
+          A stored <b>0</b> anywhere in the chain means “unset” and falls back to the next value (never zero). The result is truncated, not rounded, so 2.9 is dispatched as 2.
+          <br />⚠ Lot size and the strategy multipliers are basket-wide: every subscriber shares them, so they are read-only here. Change them in Basket Management, where you can see the effect on all subscribers. Only this user's multiplier can be edited here.
+        </p>
+      }
+    </div>
+  }
+</section>
+}

@@ -98,15 +98,19 @@ public class PositionsController(MockDataStore store) : ControllerBase
 [Route("api/console/performance")]
 public class PerformanceController(MockDataStore store) : ControllerBase
 {
+    // default loads every account in scope, so the cards match the assistant's totals
     [HttpGet("summary")]
     public PerformanceSummary Summary(
         [FromQuery] string? basket, [FromQuery] string? partnerId, [FromQuery] string? name, [FromQuery] string? broker,
-        [FromQuery] string sort = "name", [FromQuery] int pageSize = 25, [FromQuery] string? strategies = null)
+        [FromQuery] string sort = "name", [FromQuery] int pageSize = 1000, [FromQuery] string? strategies = null,
+        [FromQuery] string? clients = null)   // "1023,117": only these OMS client ids (the user selected in User Management)
     {
         var strat = MockDataStore.ParseStrategies(strategies);   // "B6_BK,S1EN" → only those strategies' positions count
         lock (store.SyncRoot)
         {
             IEnumerable<BrokerAccount> q = store.Accounts;
+            var only = string.IsNullOrWhiteSpace(clients) ? null : clients.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToHashSet();
+            if (only is not null) q = q.Where(a => only.Contains(a.ClientId));
             if (strat is not null) q = q.Where(a => a.Positions.Any(p => strat.Contains(p.Strategy)));
             if (!string.IsNullOrWhiteSpace(basket)) q = q.Where(a => a.Basket == basket);
             if (!string.IsNullOrWhiteSpace(partnerId)) q = q.Where(a => a.AccountId.Contains(partnerId, StringComparison.OrdinalIgnoreCase) || a.ClientId == partnerId);
@@ -122,7 +126,7 @@ public class PerformanceController(MockDataStore store) : ControllerBase
             return new PerformanceSummary(
                 page.Sum(x => x.item.StrategyPnl), page.Count, scope.Count,
                 page.Count(x => x.a.Status == "Active"), page.Count(x => x.a.SessionValid),
-                page.Sum(x => x.item.OpenPositions), page.Select(x => x.item).ToList());
+                page.Sum(x => x.item.OpenPositions), page.Select(x => x.item).ToList(), scope.Sum(x => x.item.StrategyPnl));
         }
     }
 

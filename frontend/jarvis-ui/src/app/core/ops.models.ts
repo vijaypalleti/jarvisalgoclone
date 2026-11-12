@@ -40,6 +40,7 @@ export interface AccountDetail { account: AccountListItem; positions: PositionRe
 export interface PerformanceSummary {
   strategyPnl: number; accountsOnPage: number; accountsInScope: number; activeAccounts: number;
   connectedAccounts: number; openPositions: number; users: AccountListItem[];
+  scopePnl: number;   // all accounts in scope (strategyPnl is only the accounts on this page)
 }
 export interface UserPerformanceDetail {
   account: AccountListItem; total: number; realized: number; unrealized: number; closed: number; open: number;
@@ -61,4 +62,34 @@ export interface ContainerSummary {
 export interface TodayActivity {
   hours: { hour: number; signals: number }[];
   funnel: { signals: number; orders: number; filled: number; rejected: number; working: number };
+}
+
+// ---------------- Performance → User Management (demo system users)
+export interface SystemUserListItem { id: number; name: string; email: string; mobile: string; status: string; hasStaticIp: boolean; accounts: number; }
+export interface SystemUserList { total: number; items: SystemUserListItem[]; }
+export interface UserDetailsDto {
+  id: number; name: string; email: string; mobile: string; role: string; status: string; publicIp: string | null; privateIp: string | null;
+  username: string | null; referralCode: string | null; created: string | null; lastModified: string;
+}
+export interface UserBrokerRow { clientId: string; broker: string; accountId: string; username: string; session: string; lot: number; algoOn: boolean; active: boolean; inOms: boolean; }
+export interface UserSubscriptionRow {
+  id: number; basket: string; basketStrategies: number; plan: string; months: number; clientId: string; broker: string; multiplier: number;
+  start: string; end: string; daysLeft: number; status: string; price: number;
+}
+export interface BasketStrategyRow { strategy: string; code: string; lotSize: number; mult: number; ce: number; pe: number; product: string; dispatchCe: number | null; dispatchPe: number | null; }
+export interface UserBasketView { basket: string; status: string; broker: string; multiplier: number; strategies: BasketStrategyRow[]; }
+export interface UserPaymentRow { id: number; subscriptionId: number; basket: string; date: string; amount: number; method: string; status: string; invoice: string; }
+export interface UserAttentionItem { severity: 'high' | 'medium' | 'low'; section: 'brokers' | 'subs' | 'billing' | 'user'; text: string; }
+export interface UserWorkspace {
+  user: UserDetailsDto; brokerAccounts: UserBrokerRow[]; subscriptions: UserSubscriptionRow[]; baskets: UserBasketView[];
+  payments: UserPaymentRow[]; lifetimeValue: number; attention: UserAttentionItem[];
+}
+
+// ---------------- Basket Management → Basket Subscriptions (all users)
+export interface SubscriptionListItem {
+  id: number; userId: number; userName: string; basket: string; basketStrategies: number; plan: string; months: number; price: number;
+  multiplier: number; start: string; end: string; daysLeft: number; status: string; broker: string; accountId: string; clientId: string;
+}
+export interface SubscriptionPage {
+  total: number; page: number; pageSize: number; pages: number; counts: Record<string, number>; items: SubscriptionListItem[]; brokers: string[];
 }

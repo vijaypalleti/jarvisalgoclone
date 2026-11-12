@@ -17,6 +17,9 @@ This folder documents the local clone of the Jarvis Algo OMS admin console (Angu
 | 9 | [Troubleshooting](09-troubleshooting.md) | fix a known error |
 | 10 | [API reference](10-api-reference.md) | look up an endpoint |
 | 11 | [Realtime pipeline](11-realtime-pipeline.md) | store live data (simulator, Fyers, your own) in Redis → SQL and build features on it |
+| 12 | [AI assistant](12-ai-assistant.md) | ask questions about live data in a floating chat (Groq GPT-OSS 20B + tool calling) |
+| 13 | [Assistant question catalogue](13-assistant-questions.md) | see every kind of question the chat can answer, with examples |
+| SQL | [sql/useful-queries.sql](sql/useful-queries.sql) | ready-to-run queries for the data in SQL Server (open in SSMS) |
 | – | [Changelog](CHANGELOG.md) | see what was built, in order |
 
 ## Keeping these docs up to date

@@ -12,13 +12,33 @@
 
   <nav>
     @for (item of nav; track item.path) {
-      <a class="nav-item" [routerLink]="item.path" routerLinkActive="active" [title]="item.label">
-        <app-icon [name]="item.icon" [size]="19" [stroke]="1.7" />
-        @if (expanded) {
-          <span class="nav-label">{{ item.label }}</span>
-          @if (item.children) { <app-icon class="caret" name="chevron-down" [size]="14" /> }
+      @if (subItems(item).length) {
+        <button class="nav-item group" [class.active]="groupActive(item) && !(expanded && openGroup() === item.path)" [class.open]="expanded && openGroup() === item.path"
+                [title]="item.label" (click)="toggleGroup(item)" [attr.aria-expanded]="openGroup() === item.path">
+          <app-icon [name]="item.icon" [size]="19" [stroke]="1.7" />
+          @if (expanded) {
+            <span class="nav-label">{{ item.label }}</span>
+            <app-icon class="caret" [class.up]="openGroup() === item.path" name="chevron-down" [size]="14" />
+          }
+        </button>
+        @if (expanded && openGroup() === item.path) {
+          <div class="sub">
+            @for (c of subItems(item); track c.path) {
+              <a class="sub-item" [routerLink]="c.path" routerLinkActive="active" [title]="c.label">
+                <app-icon [name]="c.icon" [size]="17" [stroke]="1.7" /><span>{{ c.label }}</span>
+              </a>
+            }
+          </div>
         }
-      </a>
+      } @else {
+        <a class="nav-item" [routerLink]="item.path" routerLinkActive="active" [title]="item.label">
+          <app-icon [name]="item.icon" [size]="19" [stroke]="1.7" />
+          @if (expanded) {
+            <span class="nav-label">{{ item.label }}</span>
+            @if (item.children) { <app-icon class="caret" name="chevron-down" [size]="14" /> }
+          }
+        </a>
+      }
     }
   </nav>
 
@@ -53,3 +73,6 @@
     <router-outlet />
   </main>
 </div>
+
+<!-- floating AI assistant (every page) -->
+<app-assistant-chat />

@@ -48,7 +48,7 @@
         </header>
         <div class="alist">
           @for (a of sortedAccounts(); track a.clientId) {
-            <button class="acct" [class.sel]="a.clientId === selectedId()" (click)="select(a.clientId)">
+            <button class="acct" [attr.data-ai-target]="'account:' + a.clientId" [class.sel]="a.clientId === selectedId()" (click)="select(a.clientId)">
               <span class="num">1</span>
               <div class="who">
                 <strong>{{ a.clientId }}</strong>

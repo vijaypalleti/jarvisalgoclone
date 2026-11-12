@@ -80,3 +80,11 @@ C:\Users\pvija\AppData\Local\Temp\claude\jarvis-simbuild\Jarvis.Api.deps.json
 C:\Users\pvija\AppData\Local\Temp\claude\jarvis-simbuild\Jarvis.Api.runtimeconfig.json
 C:\Users\pvija\AppData\Local\Temp\claude\jarvis-simbuild\Jarvis.Api.dll
 C:\Users\pvija\AppData\Local\Temp\claude\jarvis-simbuild\Jarvis.Api.pdb
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\appsettings.Development.json
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\appsettings.json
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\Jarvis.Api.staticwebassets.endpoints.json
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\Jarvis.Api.exe
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\Jarvis.Api.deps.json
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\Jarvis.Api.runtimeconfig.json
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\Jarvis.Api.dll
+C:\Users\pvija\AppData\Local\Temp\claude\43860896c1cc034d\c2f8fe4b-59e1-4670-8898-47a9df93b1f1\scratchpad\apibuild\Jarvis.Api.pdb

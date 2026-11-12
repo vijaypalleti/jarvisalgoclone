@@ -109,7 +109,7 @@
     <div class="mini attention">
       <header><h4>Needs attention</h4><small>Soonest first</small></header>
       <div class="att-head"><span>Subscriptions ending in 7 days</span><a (click)="scrollTo('subscription-watch')">View all →</a></div>
-      @for (s of endingSoon(); track s.accountId) {
+      @for (s of endingSoon(); track s.accountId + s.plan) {
         <div class="att-row">
           <span><strong>{{ s.name }}</strong> <small class="mono">{{ s.accountId }}</small></span>
           <span class="pill amber">{{ s.daysLeft }} day{{ s.daysLeft === 1 ? '' : 's' }} left</span>
@@ -145,7 +145,7 @@
     </header>
     <div class="progress-line"></div>
     <div class="sub-list">
-      @for (s of subs()?.items ?? []; track s.accountId) {
+      @for (s of subs()?.items ?? []; track s.accountId + s.plan) {
         <div class="sub-row">
           <i class="dot"></i>
           <div class="who">

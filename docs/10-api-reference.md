@@ -40,8 +40,18 @@ The base URL is `http://localhost:5186`. The UI reaches it through the `/api` pr
 
 | Method | Route |
 |---|---|
-| GET | `/api/console/performance/summary?basket=&partnerId=&name=&broker=&sort=&pageSize=&strategies=a,b` (P&L/positions from those strategies only) |
+| GET | `/api/console/performance/summary?basket=&partnerId=&name=&broker=&sort=&pageSize=&strategies=a,b&clients=1023,117` (P&L/positions from those strategies only; `clients` = only these OMS client ids, used when a user is selected) |
 | GET | `/api/console/performance/users/{clientId}?trades=45&strategies=a,b` |
+| GET | `/api/console/users?search=` (system users: id, name, email, mobile, status, hasStaticIp, accounts) |
+| GET | `/api/console/users/by-client/{clientId}` → `{ id }` (owner of an OMS broker account; Trading ⋮ → Manage User) |
+| GET | `/api/console/users/{id}` → workspace: user, brokerAccounts, subscriptions, baskets (with dispatched qty) |
+| POST / PUT | `/api/console/users` `{name,email,mobile}` (create) · `/api/console/users/{id}` (edit) |
+| POST | `/api/console/users/{id}/status` `{active}` · `/api/console/users/{id}/accounts/{clientId}` `{algoOn?, lot?, active?}` |
+| POST | `/api/console/users/{id}/subscriptions` `{basket, months, clientId, multiplier}` · `/api/console/users/{id}/subscriptions/{subId}/{pause\|activate\|cancel\|extend}` |
+| POST | `/api/console/users/{id}/payments/{paymentId}/paid` (mark a pending or failed payment paid) |
+| GET | `/api/console/basket-subscriptions?status=all\|active\|inactive\|expired\|paused\|cancelled&search=&basket=&broker=&expiringDays=&page=1&pageSize=20` → total, page, pages, counts per status, items, brokers |
+| POST | `/api/console/users/{id}/subscriptions/{subId}/extend?months=1..24` (from today if already ended) · DELETE `/api/console/users/{id}/subscriptions/{subId}` |
+| PUT | `/api/console/users/{id}/subscriptions/{subId}` `{multiplier}` · POST `/api/console/users/{id}/baskets/multiplier?basket=` `{multiplier}` |
 
 ## Infrastructure
 
@@ -71,6 +81,13 @@ The base URL is `http://localhost:5186`. The UI reaches it through the `/api` pr
 | WS | `/hubs/market` → invoke `Subscribe(topic)` / `Unsubscribe(topic)` → event `rt` `{ topic, key, timeUtc, data }` |
 
 Topics: `sim.spot`, `sim.pnl`, `sim.event`, `fyers.pnl`, `fyers.funds`, `fyers.positions`, `fyers.orders`, `fyers.trades`, `fyers.holdings`, `fyers.quotes`.
+
+## AI assistant (`AssistantController.cs`)
+
+| Method | Route |
+|---|---|
+| GET | `/api/assistant/status` (`{ configured, model, provider }`) |
+| POST | `/api/assistant/chat` `{ messages: [{role, content}], page? }` → `{ answer, tools: [{name, args, ms, ok}], model, ms, error }` |
 
 ## Fyers login (`FyersAuthController.cs`)
 

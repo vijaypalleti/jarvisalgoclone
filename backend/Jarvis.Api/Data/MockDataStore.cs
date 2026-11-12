@@ -16,7 +16,11 @@ public partial class MockDataStore
 
     public List<Signal> Signals { get; } = new();
     public List<AlertAccount> AlertAccounts { get; } = new();
-    public List<SubscriptionItem> Subscriptions { get; } = new();
+    /// <summary>
+    /// Active basket subscriptions ending within 30 days, soonest first. Derived from the users' real subscriptions
+    /// (MockDataStore.Users.cs), so the Overview, the Basket Subscriptions page and the assistant always agree.
+    /// </summary>
+    public List<SubscriptionItem> Subscriptions => ExpiringSubscriptions(30);
     public BrokerSessionHealth Sessions { get; private set; } = null!;
     public object SyncRoot => _lock;
 
@@ -41,6 +45,7 @@ public partial class MockDataStore
         SeedSessions();
         SeedOps();
         SeedChunksAndResiduals();
+        SeedUsers();               // own Random: doesn't change any data above
     }
 
     // ------------------------------------------------------------------ seeding
@@ -248,9 +253,10 @@ public partial class MockDataStore
             var broker = Pick(["DELTA", "ANT", "5PAISA", "FYERS", "ZERODHA"]);
             var days = i < 2 ? 1 : i < 5 ? 2 : _rng.Next(3, 8);
             var ends = now.Date.AddDays(days).AddHours(i < 2 ? 15 + i * 2 : 0).AddMinutes(i < 2 ? 44 - i * 12 : 0);
-            Subscriptions.Add(new SubscriptionItem(FakeName(), broker, FakeAccountNo(broker), Pick(Plans), ends, days));
+            // The expiring list is now derived from the users' subscriptions (see Subscriptions). These calls still run so the
+            // random sequence — and therefore every account, position and P&L seeded after this — stays exactly the same.
+            _ = (FakeName(), FakeAccountNo(broker), Pick(Plans), ends);
         }
-        Subscriptions.Sort((a, b) => a.EndsAt.CompareTo(b.EndsAt));
     }
 
     private void SeedSessions()

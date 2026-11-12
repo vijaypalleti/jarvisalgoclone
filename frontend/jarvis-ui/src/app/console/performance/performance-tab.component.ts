@@ -10,6 +10,13 @@ import { OpsService } from '../../core/ops.service';
 import { ApiService } from '../../core/api.service';
 import { AccountListItem, PerformanceSummary, UserPerformanceDetail } from '../../core/ops.models';
 import { ConsoleStateService } from '../console-state.service';
+import { UserManagementComponent } from './user-management.component';
+import { UserPickerComponent } from './user-picker.component';
+import { UserOverviewComponent } from './user-overview.component';
+import { UserBasketsComponent } from './user-baskets.component';
+import { UserBillingComponent } from './user-billing.component';
+import { UserDialogsComponent } from './user-dialogs.component';
+import { UserWorkspaceService } from './user-workspace.service';
 
 type Inner = 'overview' | 'trading' | 'users' | 'basket' | 'billing';
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -17,7 +24,8 @@ const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 @Component({
   selector: 'app-performance-tab',
   standalone: true,
-  imports: [IconComponent, TickDirective, MultiSelectComponent, DatePipe, DecimalPipe, FormsModule],
+  imports: [IconComponent, TickDirective, MultiSelectComponent, UserManagementComponent, UserPickerComponent, UserOverviewComponent,
+            UserBasketsComponent, UserBillingComponent, UserDialogsComponent, DatePipe, DecimalPipe, FormsModule],
   templateUrl: './performance-tab.component.html',
   styleUrl: './performance-tab.component.scss',
 })
@@ -27,6 +35,27 @@ export class PerformanceTabComponent {
   private state = inject(ConsoleStateService);
 
   inner = signal<Inner>('trading');
+
+  /** The user selected in User Performance: stays selected on every sub-tab and scopes it (incl. Trading). */
+  readonly uws = inject(UserWorkspaceService);
+  menuFor = signal<string | null>(null);
+  innerLabel = computed(() => this.innerTabs.find(t => t.key === this.inner())?.label ?? '');
+  hint = computed(() => {
+    const picked = !!this.uws.ws();
+    switch (this.inner()) {
+      case 'overview': return picked ? 'Who this client is, and what needs a human, across every section.' : 'Pick a user to see their overview.';
+      case 'users': return picked ? 'What this client OWNS: details, broker accounts, live subscriptions and baskets.' : 'Pick a user, or arrive here from ⋮ → Manage User in Trading.';
+      case 'basket': return picked ? 'What is CONFIGURED per broker account: assignments, multipliers and state. Global config links out.' : 'Pick a user to see their baskets.';
+      case 'billing': return picked ? 'What this client PAYS: plans, renewals and payments.' : 'Pick a user to see their billing.';
+      default: return picked ? 'Showing only the selected user\'s broker accounts. Close the user chip (✕) to see everyone.' : "Use ⋮ on any row → Manage User to open that client's full workspace.";
+    }
+  });
+  /** Trading → ⋮ → Manage User: find the system user who owns this broker account and open their workspace. */
+  manageUser(clientId: string) {
+    this.menuFor.set(null);
+    this.uws.openByClient(clientId, () => this.inner.set('users'));
+  }
+
   innerTabs: { key: Inner; label: string; icon: string }[] = [
     { key: 'overview', label: 'Overview', icon: 'bar-chart' },
     { key: 'trading', label: 'Trading', icon: 'trending-up' },
@@ -92,7 +121,7 @@ export class PerformanceTabComponent {
       this.state.refreshTick();
       const lf = this.listFilter();
       const strategies = this.strategySel().join(',') || undefined;
-      this.ops.performance({ basket: this.basket(), partnerId: lf.partnerId, name: lf.name, broker: lf.broker, strategies }).subscribe(d => {
+      this.ops.performance({ basket: this.basket(), partnerId: lf.partnerId, name: lf.name, broker: lf.broker, strategies, clients: this.uws.clientIds()?.join(',') || undefined }).subscribe(d => {
         this.data.set(d);
         const active = this.activeId();
         if (!active || !d.users.some(u => u.clientId === active)) this.open(d.users[0]?.clientId ?? null);

@@ -4,11 +4,29 @@
       <button [class.active]="inner() === t.key" (click)="inner.set(t.key)"><app-icon [name]="t.icon" [size]="13" /> {{ t.label }}</button>
     }
   </div>
-  <span class="hint">Use ⋮ on any row → Manage User to open that client's full workspace.</span>
+  @if (uws.ws(); as w) {
+    <span class="muser"><i></i><b>{{ w.user.name }}</b> <small>#{{ w.user.id }}</small><button title="Close this user (show all users)" (click)="uws.close()">✕</button></span>
+    <span class="accs">
+      <span class="label-caps">Accounts</span>
+      <button [class.on]="!uws.accFilter()" (click)="uws.accFilter.set('')">All {{ w.brokerAccounts.length }}</button>
+      @for (a of w.brokerAccounts; track a.clientId) {
+        <button [class.on]="uws.accFilter() === a.clientId" (click)="uws.accFilter.set(a.clientId)"><small>{{ a.broker }}</small> {{ a.accountId }}</button>
+      }
+    </span>
+  }
 </div>
+<p class="tabsub">{{ hint() }}</p>
 
-@if (inner() !== 'trading') {
-  <div class="card placeholder">{{ inner() === 'overview' ? 'Overview' : inner() === 'users' ? 'User Management' : inner() === 'basket' ? 'Basket & Strategy' : 'Subscriptions & Billing' }} — not cloned yet.</div>
+@if (inner() !== 'trading' && !uws.ws()) {
+  <app-user-picker [title]="inner() === 'users' ? 'Pick a user to manage' : 'Pick a user to see their ' + innerLabel().toLowerCase()" />
+} @else if (inner() === 'users') {
+  <app-user-management />
+} @else if (inner() === 'overview') {
+  <app-user-overview (go)="inner.set($event)" />
+} @else if (inner() === 'basket') {
+  <app-user-baskets />
+} @else if (inner() === 'billing') {
+  <app-user-billing />
 } @else {
 
 <section class="card filters">
@@ -35,7 +53,7 @@
           <button class="chip" [class.on]="range() === '30d'" (click)="setRange('30d')">30D</button>
           <button class="chip" [class.on]="range() === 'mtd'" (click)="setRange('mtd')">MTD</button>
         </span></label>
-      <span class="scope">Scope: {{ strategy() || 'All strategies' }} · {{ basket() || 'All baskets' }} · {{ data()?.accountsInScope ?? 0 }} accounts ({{ data()?.accountsOnPage ?? 0 }} loaded)</span>
+      <span class="scope">Scope: @if (uws.ws(); as w) { <b>{{ w.user.name }}</b> · }{{ strategy() || 'All strategies' }} · {{ basket() || 'All baskets' }} · {{ data()?.accountsInScope ?? 0 }} accounts ({{ data()?.accountsOnPage ?? 0 }} loaded)</span>
     </div>
   }
 </section>
@@ -44,18 +62,18 @@
   <div class="kpis">
     <div class="card kpi">
       <div class="kh"><span class="label-caps">Strategy P&amp;L (OMS) ⓘ</span><span class="kico orange"><app-icon name="bar-chart" [size]="14" /></span></div>
-      <div class="kv"><b class="mono" [class]="pnlClass(d.strategyPnl)" [appTick]="d.strategyPnl">₹{{ d.strategyPnl | number: '1.0-0' }}</b><span class="tag">This page</span></div>
-      <small>{{ d.accountsOnPage }} accounts on this page · {{ d.accountsInScope }} in scope</small>
+      <div class="kv"><b class="mono" [class]="pnlClass(d.strategyPnl)" [appTick]="d.strategyPnl">₹{{ d.strategyPnl | number: '1.0-0' }}</b><span class="tag">All {{ d.accountsOnPage }}</span></div>
+      <small>{{ d.accountsOnPage }} accounts in scope@if (d.accountsInScope > d.accountsOnPage) { · showing {{ d.accountsOnPage }} of {{ d.accountsInScope }}, all: <b class="mono" [class]="pnlClass(d.scopePnl)">₹{{ d.scopePnl | number: '1.0-0' }}</b>}</small>
     </div>
     <div class="card kpi">
       <div class="kh"><span class="label-caps">Active Accounts ⓘ</span><span class="kico purple"><app-icon name="users" [size]="14" /></span></div>
       <div class="kv"><b class="mono">{{ d.activeAccounts }} / {{ d.accountsOnPage }}</b></div>
-      <small>{{ d.connectedAccounts }} connected · this page only</small>
+      <small>{{ d.connectedAccounts }} connected</small>
     </div>
     <div class="card kpi">
       <div class="kh"><span class="label-caps">Open Positions ⓘ</span><span class="kico red"><app-icon name="pin" [size]="14" /></span></div>
-      <div class="kv"><b class="mono">{{ d.openPositions }}</b><span class="tag">This page</span></div>
-      <small>on this page</small>
+      <div class="kv"><b class="mono">{{ d.openPositions }}</b><span class="tag">All {{ d.accountsOnPage }}</span></div>
+      <small>across {{ d.accountsOnPage }} accounts</small>
     </div>
   </div>
 }
@@ -106,7 +124,15 @@
               <small class="mono">R <span [class]="pnlClass(u.realized)">₹{{ u.realized | number: '1.0-0' }}</span> · U <span [class]="pnlClass(u.unrealized)">₹{{ u.unrealized | number: '1.0-0' }}</span></small>
               @if (u.excludedStrategies) { <small class="warn">⚠ {{ u.excludedStrategies }} excluded</small> }
             </div>
-            <button class="more" (click)="$event.stopPropagation()">⋮</button>
+            <span class="morewrap">
+              <button class="more" title="More" (click)="$event.stopPropagation(); menuFor.set(menuFor() === u.clientId ? null : u.clientId)">⋮</button>
+              @if (menuFor() === u.clientId) {
+                <span class="rmenu" (click)="$event.stopPropagation()">
+                  <button (click)="manageUser(u.clientId)"><app-icon name="users-round" [size]="13" /> Manage User</button>
+                  <button (click)="open(u.clientId); menuFor.set(null)"><app-icon name="trending-up" [size]="13" /> View performance</button>
+                </span>
+              }
+            </span>
           </div>
         } @empty { <div class="empty">No users match.</div> }
       </div>
@@ -210,3 +236,5 @@
   </section>
 </div>
 }
+
+<app-user-dialogs />

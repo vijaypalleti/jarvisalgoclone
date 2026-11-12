@@ -139,8 +139,8 @@ public class SubscriptionsController(MockDataStore store) : ControllerBase
     [HttpGet("expiring")]
     public PagedResult<SubscriptionItem> Expiring([FromQuery] int page = 1, [FromQuery] int pageSize = 5)
     {
-        var items = store.Subscriptions.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-        return new PagedResult<SubscriptionItem>(items, store.Subscriptions.Count, page, pageSize);
+        var all = store.ExpiringSubscriptions(7);    // "ending within 7 days" (Overview → Subscription Watch / Needs attention)
+        return new PagedResult<SubscriptionItem>(all.Skip((page - 1) * pageSize).Take(pageSize).ToList(), all.Count, page, pageSize);
     }
 }
 

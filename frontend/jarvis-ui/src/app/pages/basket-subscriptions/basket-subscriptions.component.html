@@ -1,0 +1,150 @@
+<header class="phead">
+  <span class="picon"><app-icon name="basket" [size]="24" /></span>
+  <div class="pt">
+    <h1>Basket Subscriptions</h1>
+    <p>Manage basket subscriptions, multipliers and status</p>
+  </div>
+  <span class="sp"></span>
+  <button class="btn" (click)="exportCsv()"><app-icon name="download" [size]="14" /> Export CSV</button>
+  <button class="btn primary" (click)="openCreate()"><app-icon name="circle-plus" [size]="15" /> Create Subscription</button>
+</header>
+
+<section class="card filters">
+  <div class="fh">
+    <button class="ftoggle" (click)="filtersOpen.set(!filtersOpen())">
+      <app-icon name="filter" [size]="15" /> Filters @if (activeFilters()) { <span class="cnt">{{ activeFilters() }}</span> }
+      <app-icon [name]="filtersOpen() ? 'chevron-down' : 'chevron-right'" [size]="15" />
+    </button>
+    <span class="sp"></span>
+    <button class="btn" (click)="reset()">Reset</button>
+    <button class="btn primary" (click)="apply()">Apply</button>
+  </div>
+  @if (filtersOpen()) {
+    <div class="fgrid" (keyup.enter)="apply()">
+      <label>Subscriber / account<input class="input" placeholder="Name, user ID, broker account or plan" [(ngModel)]="f.search" /></label>
+      <label>Basket<select class="input" [(ngModel)]="f.basket"><option value="">All baskets</option>@for (b of baskets(); track b) { <option [value]="b">{{ b }}</option> }</select></label>
+      <label>Broker<select class="input" [(ngModel)]="f.broker"><option value="">All brokers</option>@for (b of data()?.brokers ?? []; track b) { <option [value]="b">{{ b }}</option> }</select></label>
+      <label>Expiring<select class="input" [(ngModel)]="f.expiring"><option value="">Any time</option>@for (d of expiringOptions; track d) { <option [value]="d">Within {{ d }} days</option> }@if (f.expiring && !expiringOptions.includes(f.expiring)) { <option [value]="f.expiring">Within {{ f.expiring }} days</option> }</select></label>
+    </div>
+  }
+</section>
+
+<section class="card list">
+  <div class="lh">
+    <div><h2>Subscriptions</h2><small>{{ data()?.counts?.['all'] ?? 0 | number }} total</small></div>
+    <span class="sp"></span>
+    <span class="label-caps">Items per page:</span>
+    <select class="input pp" [ngModel]="pageSize()" (ngModelChange)="setPageSize($event)">
+      <option [ngValue]="10">10</option><option [ngValue]="20">20</option><option [ngValue]="50">50</option><option [ngValue]="100">100</option>
+    </select>
+  </div>
+
+  <div class="stabs">
+    @for (t of tabs; track t.key) {
+      <button [class.on]="status() === t.key" (click)="setStatus(t.key)">
+        <app-icon [name]="t.icon" [size]="14" /> {{ t.label }} <span class="n">{{ data()?.counts?.[t.key] ?? 0 }}</span>
+      </button>
+    }
+  </div>
+
+  <div class="table-wrap" [class.loading]="loading()"><table>
+    <thead><tr><th>Subscriber</th><th>Basket</th><th>Plan</th><th class="c">Multiplier</th><th>Start / End</th><th>Status</th><th>Broker account</th><th class="c">Actions</th></tr></thead>
+    <tbody>
+      @for (s of data()?.items ?? []; track s.id) {
+        <tr [attr.data-ai-target]="'sub:' + s.id">
+          <td><span class="who">{{ s.userName }}</span><small class="id">🪪 ID: {{ s.userId }}</small></td>
+          <td><span class="bname">{{ s.basket }}</span> <span class="btag">Internal basket</span></td>
+          <td class="plan"><span>{{ s.plan }}</span><small>🗓 {{ s.months }} month{{ s.months === 1 ? '' : 's' }}</small><small>₹ {{ s.price | number: '1.0-0' }}</small></td>
+          <td class="c mult">{{ s.multiplier }}x</td>
+          <td class="dates">
+            <div><span class="g">▣</span> <b>Start:</b> {{ s.start | date: 'MMM d, y' }}</div>
+            <div><span class="r">▣</span> <b>End:</b> {{ s.end | date: 'MMM d, y' }}</div>
+          </td>
+          <td>
+            <span class="st" [class]="s.status.toLowerCase()">{{ s.status }}</span>
+            <small class="left" [class.warn]="s.status === 'Active' && s.daysLeft <= 15">{{ daysText(s) }}</small>
+          </td>
+          <td class="acc"><div>🏦 {{ s.broker }}</div><small># {{ s.accountId }}</small></td>
+          <td class="c"><div class="acts">
+            @if (s.status === 'Active') {
+              <button class="ib red" title="Pause" (click)="toggle(s)" [disabled]="busy() === s.id"><app-icon name="pause" [size]="13" /></button>
+            } @else {
+              <button class="ib green" title="Activate" (click)="toggle(s)" [disabled]="busy() === s.id || s.status === 'Cancelled'"><app-icon name="play" [size]="13" /></button>
+            }
+            <button class="ib blue" title="Edit multiplier" (click)="modal.set({ kind: 'edit', s, multiplier: s.multiplier })" [disabled]="s.status === 'Cancelled'"><app-icon name="square-pen" [size]="13" /></button>
+            <button class="ib teal" title="Extend subscription" (click)="modal.set({ kind: 'extend', s, months: 1 })" [disabled]="s.status === 'Cancelled'"><app-icon name="calendar-plus" [size]="13" /></button>
+            <button class="ib amber" title="Send renewal reminder" (click)="remind(s)"><app-icon name="bell" [size]="13" /></button>
+            <button class="ib red" title="Delete" (click)="modal.set({ kind: 'delete', s })"><app-icon name="trash" [size]="13" /></button>
+          </div></td>
+        </tr>
+      } @empty { <tr><td colspan="8" class="empty">{{ loading() ? 'Loading…' : 'No subscriptions match.' }}</td></tr> }
+    </tbody>
+  </table></div>
+
+  @if (data(); as d) {
+    <div class="pager">
+      <button class="pg" (click)="go(1)" [disabled]="d.page === 1">First</button>
+      <button class="pg" (click)="go(d.page - 1)" [disabled]="d.page === 1">Previous</button>
+      @for (p of pageList(); track p) { <button class="pg num" [class.on]="p === d.page" (click)="go(p)">{{ p }}</button> }
+      @if (pageList().length && pageList()[pageList().length - 1] < d.pages) { <span class="pg dots">…</span> }
+      <button class="pg" (click)="go(d.page + 1)" [disabled]="d.page === d.pages">Next</button>
+      <button class="pg" (click)="go(d.pages)" [disabled]="d.page === d.pages">Last</button>
+      <span class="tot">Total: {{ d.total | number }}</span>
+      <span class="muted">Showing {{ d.items.length }} of {{ d.total | number }} Subscriptions</span>
+    </div>
+  }
+</section>
+
+<!-- ================= dialogs ================= -->
+@if (modal(); as m) {
+  <div class="scrim" (click)="modal.set(null)"></div>
+  <form class="modal card" role="dialog" aria-modal="true" (submit)="$event.preventDefault(); submit()" (keydown.escape)="modal.set(null)">
+    @switch (m.kind) {
+      @case ('edit') {
+        @let e = ed(m);
+        <h3>Edit multiplier</h3>
+        <p>{{ e.s.userName }} · {{ e.s.basket }} · {{ e.s.broker }} {{ e.s.accountId }}</p>
+        <label>Multiplier<input class="input" name="mu" type="number" min="1" max="50" step="1" [(ngModel)]="e.multiplier" /></label>
+      }
+      @case ('extend') {
+        @let e = ex(m);
+        <h3>Extend subscription</h3>
+        <p>{{ e.s.userName }} · {{ e.s.basket }}. Current end: <b>{{ e.s.end | date: 'MMM d, y' }}</b> ({{ daysText(e.s) }})</p>
+        <label>Extend by<select class="input" name="mo" [(ngModel)]="e.months"><option [ngValue]="1">1 month</option><option [ngValue]="3">3 months</option><option [ngValue]="6">6 months</option><option [ngValue]="12">12 months</option></select></label>
+        <p>New end date: <b>{{ newEnd(e) | date: 'MMM d, y' }}</b>@if (e.s.daysLeft <= 0) { (counted from today because it has already ended) }</p>
+      }
+      @case ('delete') {
+        @let e = de(m);
+        <h3>Delete subscription</h3>
+        <p>Delete the <b>{{ e.s.basket }}</b> subscription of <b>{{ e.s.userName }}</b> on {{ e.s.broker }} {{ e.s.accountId }}? This can't be undone. Use Pause to stop it temporarily.</p>
+      }
+      @case ('create') {
+        @let c = cr(m);
+        <h3>Create subscription</h3>
+        @if (!c.userId) {
+          <label>Subscriber<input class="input" name="us" placeholder="Search by name, email or ID" [ngModel]="c.search" (ngModelChange)="searchUsers($event)" autocomplete="off" /></label>
+          <div class="ulist">
+            @for (u of c.users; track u.id) { <button type="button" (click)="pickUser(u)"><b>{{ u.name }}</b> <small>#{{ u.id }} · {{ u.email }}</small></button> }
+            @empty { <small class="muted">Users with a broker account appear here.</small> }
+          </div>
+        } @else {
+          <div class="picked"><b>{{ c.userName }}</b> <small>#{{ c.userId }}</small> <button type="button" class="link" (click)="modal.set({ kind: 'create', search: '', users: [], userId: null, userName: '', accounts: [], clientId: '', basket: c.basket, months: c.months, multiplier: c.multiplier }); searchUsers('')">change</button></div>
+          <label>Broker account<select class="input" name="ac" [(ngModel)]="c.clientId">@for (a of c.accounts; track a.clientId) { <option [value]="a.clientId">{{ a.broker }} · {{ a.accountId }}</option> }</select></label>
+          <label>Basket<select class="input" name="bk" [(ngModel)]="c.basket">@for (b of baskets(); track b) { <option [value]="b">{{ b }}</option> }</select></label>
+          <div class="two">
+            <label>Plan length<select class="input" name="mo" [(ngModel)]="c.months"><option [ngValue]="1">1 month</option><option [ngValue]="3">3 months</option><option [ngValue]="6">6 months</option><option [ngValue]="12">12 months</option></select></label>
+            <label>Multiplier<input class="input" name="mu" type="number" min="1" max="50" [(ngModel)]="c.multiplier" /></label>
+          </div>
+        }
+      }
+    }
+    <p class="demo">Demo: changes edit the in-memory demo data only.</p>
+    <div class="mact">
+      <button type="button" class="btn" (click)="modal.set(null)">Cancel</button>
+      <button type="submit" class="btn" [class.primary]="m.kind !== 'delete'" [class.dangerfill]="m.kind === 'delete'" [disabled]="busy() !== null || (m.kind === 'create' && !cr(m).userId)">
+        {{ m.kind === 'delete' ? 'Delete' : m.kind === 'extend' ? 'Extend' : m.kind === 'create' ? 'Create' : 'Save' }}
+      </button>
+    </div>
+  </form>
+}
+@if (toast(); as t) { <div class="toast" [class.bad]="t.bad" role="status">{{ t.text }}</div> }

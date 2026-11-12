@@ -42,6 +42,7 @@ public class RealtimeBus(IConnectionMultiplexer mux, IHubContext<MarketHub> hub,
         new("fyers.trades",    "Fyers",     "Trade book (fills)",                                  "trade number"),
         new("fyers.holdings",  "Fyers",     "Holdings (qty, cost, LTP, P&L)",                      "symbol"),
         new("fyers.quotes",    "Fyers",     "Index / symbol quotes",                               "symbol"),
+        new("ai.chat",         "Assistant", "Chat questions, tools used, latency (no answers stored)", "assistant"),
     ];
 
     public static bool IsKnown(string topic) => Topics.Any(t => t.Name == topic);

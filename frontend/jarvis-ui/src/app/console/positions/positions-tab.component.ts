@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute } from '@angular/router';
@@ -11,6 +11,7 @@ import {
   AccountDetail, AccountListItem, AutoCloseEntry, CleanupItem, HedgeRecord, InFlightExit, PositionRecord, PositionsTabSummary
 } from '../../core/ops.models';
 import { ConsoleStateService } from '../console-state.service';
+import { UiPointerService } from '../../shared/ui-pointer.service';
 
 type Sub = 'tracking' | 'inflight' | 'cleanup' | 'hedges' | 'autoclose';
 const BROKERS = ['5PAISA', 'ANT', 'ANGELONE', 'ZERODHA', 'UPSTOX', 'FYERS', 'SHAREINDIA', 'NUBRA'];
@@ -100,6 +101,20 @@ export class PositionsTabComponent {
       if (s === 'autoclose') this.ops.autoClose().subscribe(x => this.autoClose.set(x));
     });
   }
+
+  // assistant "show 1023's positions": list only that client and open its detail
+  private pointerFx = (() => {
+    const pointer = inject(UiPointerService);
+    effect(() => {
+      const id = pointer.request()?.focus?.['clientId'];
+      if (!id) return;
+      untracked(() => {
+        this.sub.set('tracking');
+        this.f = { search: '', broker: '', clientId: id, partnerId: '', openOnly: false };
+        this.apply(); this.select(id);
+      });
+    });
+  })();
 
   private emptyDetailFilter() {
     return { status: 'All', symbol: '', strategyId: '', exchange: '', product: '', entrySignal: '', exitSignal: '',

@@ -97,3 +97,13 @@ nav {
 }
 
 .content { flex: 1; padding: 14px 18px 24px; }
+
+/* sub-menus (Basket Management → Basket Subscriptions, …) */
+button.nav-item { width: 100%; border: 1px solid transparent; background: none; font: inherit; text-align: left; cursor: pointer; }
+.nav-item.group.open { background: rgba(255, 255, 255, .04); color: #fff; }
+.nav-item .caret { transition: transform .2s; &.up { transform: rotate(180deg); } }
+.sub { margin: -2px 0 6px 14px; padding-left: 10px; border-left: 1px solid rgba(255, 255, 255, .08); }
+.sub-item { display: flex; align-items: center; gap: 14px; height: 40px; padding: 0 12px; margin-bottom: 3px; border-radius: 9px; border: 1px solid transparent;
+  color: #b6c2bd; font-size: 13.5px; white-space: nowrap;
+  &:hover { background: rgba(255, 255, 255, .05); color: #fff; }
+  &.active { background: var(--sidebar-active); color: #86efac; font-weight: 600; border-color: rgba(34, 197, 94, .25); box-shadow: inset 3px 0 0 var(--sidebar-accent); } }

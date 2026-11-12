@@ -85,3 +85,12 @@ The full schema is in `Data/MarketDb.cs`. For BTCUSD, `Size` is in contracts, an
 ## Files
 
 `Services/RedisMarketStore.cs`, `Services/MarketPersister.cs`, `Data/MarketDb.cs`, and `Controllers/DeltaController.cs` (`MarketStorageController`).
+
+## Looking at the data yourself
+
+Open **SSMS** and connect to `localhost\SQLEXPRESS` with Windows Authentication (in *Options → Connection Properties* tick **Trust server certificate**). Then open [sql/useful-queries.sql](sql/useful-queries.sql). It has queries for BTC candles/trades/ticker, the Fyers views, simulator P&L/events/spot and the AI chat log.
+
+- Times are stored in **UTC**; add 5:30 for IST (`DATEADD(MINUTE, 330, EventTime)`).
+- For `DeltaTrades` sort by `Id` (indexed), not `TradeTime` (200k+ rows scanned, ~30 s).
+- `v*` views parse JSON, so filter by time (`EventTime >= ...`) or use `TOP` on large topics like `sim.pnl`.
+

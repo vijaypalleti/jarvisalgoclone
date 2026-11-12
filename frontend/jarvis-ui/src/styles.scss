@@ -126,3 +126,21 @@ a { color: inherit; text-decoration: none; }
 @keyframes tickUp { 0% { background-color: rgba(22, 163, 74, .28); } 100% { background-color: transparent; } }
 @keyframes tickDown { 0% { background-color: rgba(220, 38, 38, .24); } 100% { background-color: transparent; } }
 @media (prefers-reduced-motion: reduce) { .tick-up, .tick-down { animation: none; } }
+
+/* assistant "show on screen" highlight (UiPointerService) */
+.ai-point {
+  position: relative; z-index: 3;
+  outline: 3px solid #f43f5e !important; outline-offset: 3px; border-radius: 10px;
+  animation: aiPoint 1.2s ease-in-out infinite;
+}
+@keyframes aiPoint {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(244, 63, 94, .55), 0 0 18px 2px rgba(168, 85, 247, .35); }
+  50% { box-shadow: 0 0 0 12px rgba(244, 63, 94, 0), 0 0 28px 6px rgba(168, 85, 247, .5); }
+}
+.ai-point-tag {
+  position: fixed; z-index: 2147483000; pointer-events: none; max-width: min(420px, calc(100vw - 16px));
+  padding: 5px 10px; border-radius: 8px; font: 600 12px/1.35 system-ui, sans-serif; color: #fff;
+  background: linear-gradient(90deg, #e11d48, #9333ea); box-shadow: 0 6px 20px rgba(0, 0, 0, .25);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: opacity .2s;
+}
+@media (prefers-reduced-motion: reduce) { .ai-point { animation: none; box-shadow: 0 0 0 4px rgba(244, 63, 94, .35); } }

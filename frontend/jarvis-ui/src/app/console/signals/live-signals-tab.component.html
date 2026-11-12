@@ -86,9 +86,11 @@
       @let b = badge(s);
       @let seg = segments(s);
       @let ex = exitStep(s);
-      <article class="sig" [class.attn]="s.needsAttention" [class.residual]="s.health === 'residual'" (click)="selected.set(s)">
+      <article class="sig" [attr.data-ai-target]="'signal:' + s.id" [class.attn]="s.needsAttention" [class.residual]="s.health === 'residual'" (click)="selected.set(s)">
         <div class="r1">
-          <span class="time mono">{{ s.reachedApiAt | date: 'HH:mm:ss.SSS' }}</span>
+          <span class="time mono" [title]="'Reached API ' + (s.reachedApiAt | date: 'dd MMM yyyy, HH:mm:ss.SSS')">
+            <b>{{ s.reachedApiAt | date: 'dd MMM yyyy' }}</b>{{ s.reachedApiAt | date: 'HH:mm:ss.SSS' }}
+          </span>
           <div class="sym">
             <strong>{{ s.symbol }}</strong>
             <small>

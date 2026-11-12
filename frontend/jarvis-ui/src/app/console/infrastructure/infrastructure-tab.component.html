@@ -51,7 +51,7 @@
     <div class="grid">
       @for (c of shown(); track c.name) {
         @let h = healthOf(c);
-        <div class="cc" [class.bad]="h === 'Unhealthy'" [class.deg]="h === 'Degraded'">
+        <div class="cc" [attr.data-ai-target]="'container:' + c.name" [class.bad]="h === 'Unhealthy'" [class.deg]="h === 'Degraded'">
           <div class="ch">
             <i class="led" [class.on]="c.status === 'Running'"></i>
             <strong class="mono" [title]="c.name">{{ c.name }}</strong>
@@ -90,7 +90,7 @@
       <tbody>
         @for (c of shown(); track c.name) {
           @let h = healthOf(c);
-          <tr>
+          <tr [attr.data-ai-target]="'container:' + c.name">
             <td class="mono"><i class="led" [class.on]="c.status === 'Running'"></i> {{ c.name }}</td>
             <td><span class="pill" [class.green]="c.status === 'Running'" [class.red]="c.status !== 'Running'">{{ c.status }}</span></td>
             <td><span class="pill" [class.green]="h === 'Healthy'" [class.amber]="h === 'Degraded'" [class.red]="h === 'Unhealthy'">{{ h }}</span></td>

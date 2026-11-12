@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { interval } from 'rxjs';
@@ -7,6 +7,7 @@ import { IconComponent } from '../../shared/icon.component';
 import { OpsService } from '../../core/ops.service';
 import { ContainerInfo, ContainerSummary } from '../../core/ops.models';
 import { ConsoleStateService } from '../console-state.service';
+import { UiPointerService } from '../../shared/ui-pointer.service';
 
 @Component({
   selector: 'app-infrastructure-tab',
@@ -64,6 +65,12 @@ export class InfrastructureTabComponent {
 
   constructor() {
     effect(() => { this.state.refreshTick(); this.load(); });
+    // assistant "show the container that's down": make sure no search/health filter hides it
+    const pointer = inject(UiPointerService);
+    effect(() => {
+      if (!pointer.request()?.targets.some(t => t.key.startsWith('container:'))) return;
+      untracked(() => { this.search.set(''); this.healthSel.set('All'); this.chip.set('All'); });
+    });
     const destroy = inject(DestroyRef);
     interval(this.state.livePollMs).pipe(takeUntilDestroyed(destroy)).subscribe(() => { if (this.autoRefresh()) this.load(true); });
     interval(1_000).pipe(takeUntilDestroyed(destroy)).subscribe(() => this.now.set(Date.now()));

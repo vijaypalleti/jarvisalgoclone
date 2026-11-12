@@ -47,6 +47,16 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<RealtimePersister>
 builder.Services.AddSingleton<FyersPoller>();   // read-only Fyers → bus, even when no page is open
 builder.Services.AddHostedService(sp => sp.GetRequiredService<FyersPoller>());
 
+// AI assistant (floating chat): Groq "openai/gpt-oss-20b" with read-only tool calling. Key: user-secrets "Groq:ApiKey".
+builder.Services.AddHttpClient("groq", c =>
+{
+    c.BaseAddress = new Uri(builder.Configuration["Groq:BaseUrl"] ?? "https://api.groq.com/openai/v1/");
+    c.Timeout = TimeSpan.FromSeconds(40);
+});
+builder.Services.AddSingleton<Jarvis.Api.Services.Assistant.GroqKeyPool>();   // 1..N keys with failover (Groq:ApiKeys:0..N)
+builder.Services.AddScoped<Jarvis.Api.Services.Assistant.AssistantTools>();
+builder.Services.AddScoped<Jarvis.Api.Services.Assistant.AssistantService>();
+
 // Demo simulator: keeps the fake OMS data (P&L, positions, exits, signals, containers) moving
 builder.Services.AddSingleton<MarketSimulator>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<MarketSimulator>());

@@ -20,6 +20,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/crypto-live/crypto-live.component').then(m => m.CryptoLiveComponent),
       },
       {
+        path: 'admin/basket-subscriptions',
+        loadComponent: () => import('./pages/basket-subscriptions/basket-subscriptions.component').then(m => m.BasketSubscriptionsComponent),
+      },
+      {
         path: 'admin/realtime',
         loadComponent: () => import('./pages/realtime/realtime-page.component').then(m => m.RealtimePageComponent),
       },

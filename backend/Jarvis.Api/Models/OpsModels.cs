@@ -92,7 +92,7 @@ public record AccountDetail(AccountListItem Account, List<PositionRecord> Positi
 
 public record PerformanceSummary(
     decimal StrategyPnl, int AccountsOnPage, int AccountsInScope, int ActiveAccounts, int ConnectedAccounts,
-    int OpenPositions, List<AccountListItem> Users);
+    int OpenPositions, List<AccountListItem> Users, decimal ScopePnl = 0);   // ScopePnl = all accounts in scope, not just this page
 
 public record UserPerformanceDetail(
     AccountListItem Account, decimal Total, decimal Realized, decimal Unrealized, int Closed, int Open,

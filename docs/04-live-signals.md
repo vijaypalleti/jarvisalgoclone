@@ -26,7 +26,7 @@ In the real system, a signal could say **"exit completed"** while one client acc
 - **Segmented progress bar:** green = exited, blue = filled but still open, red = never filled, as a share of the requested quantity. Hover for exact numbers.
 - **One badge** per signal, instead of the four separate tags it used to show.
 - **Lifecycle steps:** `✓ Entry → ✓ Exit` (or ⚠ partial, or … pending). Click a correlation ID to copy it.
-- **Date headings** (Today, Yesterday, then dates) when sorted by time.
+- **Date and time on every row** (`11 Nov 2026` above `15:29:21.000`; hover for the full timestamp), plus **date headings** (Today, Yesterday, then dates) when sorted by time.
 - **Cards / Compact** toggle. Compact shows one line per signal; your choice is remembered in the browser.
 - Filters (date, symbol, correlation, client, basket, strategy) can be saved and loaded as a preset. Strategy is a multi-select (search, codes, Clear / Apply), and the list shows signals from any selected strategy.
 - Auto-refresh is on, every 5 s.

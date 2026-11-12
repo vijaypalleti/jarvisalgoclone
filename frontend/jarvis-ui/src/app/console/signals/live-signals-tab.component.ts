@@ -1,4 +1,4 @@
-import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal, untracked } from '@angular/core';
 import { DatePipe, DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { interval } from 'rxjs';
@@ -8,6 +8,7 @@ import { MultiSelectComponent, MsOption } from '../../shared/multi-select.compon
 import { ApiService } from '../../core/api.service';
 import { SignalListItem, SignalListResponse, SignalQuery } from '../../core/models';
 import { ConsoleStateService } from '../console-state.service';
+import { UiPointerService } from '../../shared/ui-pointer.service';
 import { SignalDetailModalComponent } from './signal-detail-modal.component';
 
 const PRESET_KEY = 'jarvis.signals.preset';
@@ -81,6 +82,17 @@ export class LiveSignalsTabComponent {
       this.strategyCodes.set(Object.fromEntries(f.strategyCatalog.map(x => [x.name, x.code])));
     });
     effect(() => { this.state.refreshTick(); this.load(this.query()); });
+    // assistant "show signal 506": filter to exactly that signal (correlation id + its day) so the row is on screen
+    const pointer = inject(UiPointerService);
+    effect(() => {
+      const f = pointer.request()?.focus;
+      if (!f?.['correlationId']) return;
+      untracked(() => {
+        this.subTab.set('recent'); this.quick.set('all');
+        this.form = { ...this.defaultForm(), correlationId: f['correlationId'], from: f['from'], to: f['to'] };
+        this.apply();
+      });
+    });
     interval(5_000).pipe(takeUntilDestroyed(inject(DestroyRef))).subscribe(() => {
       if (this.autoRefresh()) this.load(this.query());
     });
