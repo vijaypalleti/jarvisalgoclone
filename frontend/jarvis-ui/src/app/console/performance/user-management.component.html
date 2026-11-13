@@ -7,7 +7,7 @@
   <span class="av big">{{ initials(u.name) }}</span>
   <div class="uh">
     <h2>{{ u.name }} <span class="pill" [class.green]="u.status === 'Active'" [class.gray]="u.status !== 'Active'">{{ u.status }}</span></h2>
-    <div class="meta"><span>✉ {{ u.email }}</span><span>☎ {{ u.mobile }}</span><span class="mono">User #{{ u.id }}</span></div>
+    <div class="meta"><span>✉ {{ u.email }}</span><span>☎ {{ u.mobile }}</span><span class="mono" title="System user id (User Management)">User #{{ u.id }}</span>@if (omsIds()) { <span class="mono oms" title="Client id(s) in the OMS trading book: Positions, Signals, Trading, the assistant">OMS client {{ omsIds() }}</span> }</div>
   </div>
   <button class="btn" (click)="svc.close()">⇄ Switch user</button>
 </section>
@@ -70,12 +70,13 @@
         <span class="muted note">Login opens the broker's login page, the same way Settings does, then brings you back. (Not available in the demo.)</span>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Broker</th><th>Client ID</th><th>Username</th><th>Session</th><th class="n">Lot</th><th>Algo</th><th>Account</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Broker</th><th title="The broker's own client code">Broker client ID</th><th title="Client id in the OMS trading book (Positions, Signals, Trading, the assistant)">OMS client ID</th><th>Username</th><th>Session</th><th class="n">Lot</th><th>Algo</th><th>Account</th><th>Actions</th></tr></thead>
         <tbody>
           @for (a of svc.brokerRows(); track a.clientId) {
             <tr [class.dim]="!a.active">
               <td><span class="bpill">{{ a.broker }}</span></td>
               <td class="mono">{{ a.accountId }}</td>
+              <td class="mono">@if (a.inOms) { <b>{{ a.clientId }}</b> } @else { <span class="muted" title="Not trading in the OMS demo book">—</span> }</td>
               <td>{{ a.username }}</td>
               <td><span class="pill" [class.green]="a.session === 'Logged in'" [class.gray]="a.session !== 'Logged in'">{{ a.session }}</span></td>
               <td class="n mono">{{ a.lot }}</td>
@@ -89,7 +90,7 @@
                 <button class="btn sm" [class.danger]="a.active" [class.ok]="!a.active" (click)="svc.toggleAccount(a)" [disabled]="svc.busy()">{{ a.active ? '⛔ Deactivate' : '✓ Activate' }}</button>
               </div></td>
             </tr>
-          } @empty { <tr><td colspan="8" class="empty">No broker accounts.</td></tr> }
+          } @empty { <tr><td colspan="9" class="empty">No broker accounts.</td></tr> }
         </tbody>
       </table></div>
     </div>

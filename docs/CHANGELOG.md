@@ -2,6 +2,48 @@
 
 Newest first. Add a line here whenever something changes (see [README](README.md#keeping-these-docs-up-to-date)).
 
+## 2026-11-13
+
+- **Positions & Exits shows user names:** each broker account in the list reads *1023 Kavya Nair* (client id + name, with broker · #account below), and the account detail header shows the name too. The search box already matched names.
+- **Live price and chart for any NSE/BSE stock.**
+  - **Assistant:**
+    - New tool `get_stock_quote`: "what is the current price of Reliance?", "price of TCS, Infosys and HDFC Bank".
+    - "open Reliance chart" opens Market Charts on that stock.
+  - **Market Charts:** a stock search box (name, nickname or symbol) adds the stock as a 5th card with candles, volume and live quote.
+  - **Backend:**
+    - New `FyersSymbols`, using Fyers' public symbol master (downloaded daily, cached in `%LOCALAPPDATA%\JarvisDemo\symbols`).
+    - `/api/market/search`, `/api/market/quotes`; `candles` and `quote` accept any ticker or name.
+  - **Verified:**
+    - Name lookup: Reliance → NSE:RELIANCE-EQ, HDFC Bank, TCS, Infosys, L&T, M&M, SBI → SBIN, Zomato → ETERNAL; nonsense finds nothing.
+    - The chat picked the right tool for single and multi-stock questions.
+    - The search box and "open reliance chart" opened and highlighted the right chart.
+    - **Live prices were not verified:** the Fyers session had expired (Fyers sessions end early each morning). The app says so and links to Broker Live → Renew with PIN.
+- **Market Charts page + "open … chart" in the assistant.**
+  - **The page** (`/admin/market-charts`, also in the sidebar): candlestick charts for NIFTY 50, BANK NIFTY and SENSEX from **Fyers historical data** (new read-only `FyersClient.History`, using your session), and BTCUSD from Delta.
+    - Timeframes 1m–1d.
+    - The header shows the live quote every 5 s.
+    - The last candle moves during market hours; there's a market-closed badge outside them.
+  - **The assistant:**
+    - "open nifty50 chart", "open btc chart", "open sensex live chart" (or "… 15m chart") open the page on that symbol and highlight the chart (new `show_on_screen` target `chart`).
+    - "chart" / "graph" now count as navigation wording.
+  - **Fixed while testing:**
+    1. Fyers returned NIFTY candles **out of time order**, which crashed the chart. Candles are now sorted and de-duplicated on the server and in the browser.
+    2. **Fyers' 5 requests/second limit** (error -360) was hit by bursts. All Fyers calls are now spaced at least 220 ms apart, with one retry. A 9-request burst with the poller running passed.
+  - **Verified with real Fyers data:**
+    - NIFTY 50 ₹25,299.35 ▲0.18% and SENSEX ₹81,911.01; BTC live;
+    - 300 sorted candles for every symbol and timeframe (248 daily);
+    - all three questions opened and highlighted the right chart.
+- **Two kinds of ids, now shown and understood:**
+  - **System user id:** "User #8606", a person in User Management.
+  - **OMS client id:** e.g. 1360, the broker account in the trading book (Positions, Signals, Trading, containers, the assistant). One user can own several.
+  - **The problem:** User Management never showed the OMS client id, and the assistant didn't know user ids ("pnl in 8606 account" → "couldn't find").
+  - **Now:**
+    - User Management shows **OMS client 1360** next to *User #8606* in the header.
+    - The Broker Accounts table has a separate **OMS client ID** column; the broker's own code is labelled *Broker client ID*.
+    - The ACCOUNTS pills show it too (*UPSTOX 8BLAT3 · 1360*).
+    - `find_broker_account` accepts a user id (8606, #8606, "user 8606"), and the answer names both ids.
+  - **Verified:** "what was the current pnl in 8606 account" → "Account #8606 (Lakshmi Nair, OMS client 1360) total P&L …"; "where is client 1360 in user management" → "User #8606 Lakshmi Nair".
+
 ## 2026-11-12
 
 - **Assistant can open and point at subscriptions:**

@@ -33,7 +33,7 @@ Styles are in `shared/assistant-chat.component.ts`. Answer HTML is inserted with
 "Point the container which is not working", "show me signal 506", "take me to 1023's positions".
 
 **How it works**
-1. Tool `show_on_screen(target, id)` in `AssistantTools.cs` (targets `containers_down`, `container`, `signal`, `account`, `subscription`, `subscriptions_expiring`) finds the item(s) and sets a `UiAction { route, query, targets[{key,label}], focus }`.
+1. Tool `show_on_screen(target, id)` in `AssistantTools.cs` (targets `containers_down`, `container`, `signal`, `account`, `subscription`, `subscriptions_expiring`, `chart`) finds the item(s) and sets a `UiAction { route, query, targets[{key,label}], focus }`.
 2. `AssistantService` returns it as `action` in the chat response (still read-only: it only describes what to show).
 3. `shared/ui-pointer.service.ts` (`UiPointerService.run`) navigates to `route?query` (e.g. `?tab=infrastructure`), publishes `request` so the tab can reset filters / select the item (`focus`), waits up to 6 s for `[data-ai-target="<key>"]`, scrolls the first into view and adds the `.ai-point` pulse + a floating `.ai-point-tag` label (styles in `styles.scss`). It clears after 12 s or when you click the item.
 4. In voice mode the dim layer is removed while something is highlighted.
@@ -43,6 +43,7 @@ Styles are in `shared/assistant-chat.component.ts`. Answer HTML is inserted with
 - `signal:<id>`: Live Signals rows.
 - `account:<clientId>`: the Positions & Exits account list.
 - `sub:<subscriptionId>`: Basket Subscriptions rows.
+- `chart:<symbol>`: the Market Charts chart card.
 
 **Filters by URL:** Basket Subscriptions reads its filters from the URL (`?search=&basket=&broker=&expiring=7&status=active`), so the assistant's link opens it already filtered. Those links can also be bookmarked or shared.
 

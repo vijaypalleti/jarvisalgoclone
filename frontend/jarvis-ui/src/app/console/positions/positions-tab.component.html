@@ -51,7 +51,7 @@
             <button class="acct" [attr.data-ai-target]="'account:' + a.clientId" [class.sel]="a.clientId === selectedId()" (click)="select(a.clientId)">
               <span class="num">1</span>
               <div class="who">
-                <strong>{{ a.clientId }}</strong>
+                <strong>{{ a.clientId }} <span class="uname" [title]="a.name">{{ a.name }}</span></strong>
                 <div><span class="pill green">{{ a.status }}</span> <span class="muted">{{ a.broker }} · #{{ a.accountId }}</span></div>
               </div>
               <div class="cnts">
@@ -67,7 +67,7 @@
       <section class="card detail">
         @if (detail(); as d) {
           <header>
-            <h3><app-icon name="pin" [size]="14" class="r" /> {{ d.account.clientId }} <small>#{{ d.account.accountId }} · {{ d.account.broker }}</small></h3>
+            <h3><app-icon name="pin" [size]="14" class="r" /> {{ d.account.clientId }} <span class="uname">{{ d.account.name }}</span> <small>#{{ d.account.accountId }} · {{ d.account.broker }}</small></h3>
             <button class="btn sm"><app-icon name="bar-chart" [size]="12" /> Event Tracking</button>
           </header>
 

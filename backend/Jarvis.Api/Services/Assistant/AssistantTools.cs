@@ -10,7 +10,8 @@ namespace Jarvis.Api.Services.Assistant;
 /// (Delta feed in memory, OMS demo store, the real Fyers account). Add a tool = add a definition + a case in RunAsync.
 /// </summary>
 public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersClient fyers, RealtimeDb rtDb, MarketDb marketDb,
-    RealtimeBus bus, RealtimePersister rtPersister, MarketPersister marketPersister, FyersPoller fyersPoller, IWebHostEnvironment env)
+    RealtimeBus bus, RealtimePersister rtPersister, MarketPersister marketPersister, FyersPoller fyersPoller, IWebHostEnvironment env,
+    FyersSymbols symbols)
 {
     // ------------------------------------------------------------------ definitions (OpenAI/Groq "tools" format)
 
@@ -21,7 +22,7 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
             "The REAL Fyers broker account of Vijay (the console owner). Use for 'Vijay', 'my account', 'Fyers', 'my P&L/funds/positions/holdings/orders'. Returns profile, funds, P&L, open positions, holdings, today's orders by status.",
             new { }),
         Tool("find_broker_account",
-            "Look up demo OMS broker accounts by client id (e.g. '1023'), broker account number, person name or broker. Returns status (Active, session valid / token stale), broker, basket, open & closed positions, realized/unrealized/total P&L (INR), container health and open issues for that account.",
+            "Look up demo OMS broker accounts by OMS client id (e.g. '1023'), SYSTEM USER id from User Management (e.g. '8606' / '#8606' / 'user 8606'), broker account number, person name or broker. Returns status (Active, session valid / token stale), broker, basket, open & closed positions, realized/unrealized/total P&L (INR), container health and open issues for that account.",
             new { query = Str("client id, broker account number, name or broker, e.g. '1023'") }, "query"),
         Tool("get_positions",
             "Positions in the demo OMS, optionally for one account and/or strategy. Returns counts (open / closed / at-risk) and a list with symbol, side, qty, avg, LTP, P&L.",
@@ -71,6 +72,9 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
                 symbol = Str("symbol, partial ok (optional)"), strategy = Str("strategy name (optional)"),
                 limit = new { type = "integer", description = "default 5" },
             }),
+        Tool("get_stock_quote",
+            "Live price of ANY NSE/BSE listed stock or index from Fyers (read-only market data): last price, change, change %, open/high/low, previous close, volume. Accepts company names, nicknames or symbols, several at once, e.g. 'Reliance, TCS, HDFC Bank' or 'SBI' or 'NSE:INFY-EQ'. Prices are INR.",
+            new { stocks = Str("one or more company names / symbols, comma-separated") }, "stocks"),
         Tool("get_market_indices",
             "Current NIFTY 50, BANK NIFTY and SENSEX levels (real Fyers quotes when connected; otherwise the simulated NIFTY).",
             new { }),
@@ -100,10 +104,10 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
             "Vijay's REAL Fyers orders today with status and the broker's message (e.g. why an order was rejected). Filter rejected / pending / completed / cancelled / all.",
             new { status = new { type = "string", @enum = new[] { "all", "rejected", "pending", "completed", "cancelled" }, description = "default all" }, limit = new { type = "integer", description = "default 10" } }),
         Tool("show_on_screen",
-            "Open the console page and visually POINT AT (highlight) something for the user. Use when they say show / point / highlight / take me to / where is / open. targets: 'containers_down' = every stopped, unhealthy or no-heartbeat container (default for 'which container is not working'); 'container' = one container by name or client id; 'signal' = one signal by id; 'account' = one account's positions by client id/name; 'subscription' = a subscriber's basket subscriptions (id = person's name, user id or broker account) on the Basket Subscriptions page; 'subscriptions_expiring' = active subscriptions ending within N days (id = days, default 7; 'a week' = 7). Then answer briefly what is highlighted and why (for subscriptions include status and days left).",
+            "Open the console page and visually POINT AT (highlight) something for the user. Use when they say show / point / highlight / take me to / where is / open. targets: 'containers_down' = every stopped, unhealthy or no-heartbeat container (default for 'which container is not working'); 'container' = one container by name or client id; 'signal' = one signal by id; 'account' = one account's positions by client id/name; 'subscription' = a subscriber's basket subscriptions (id = person's name, user id or broker account) on the Basket Subscriptions page; 'subscriptions_expiring' = active subscriptions ending within N days (id = days, default 7; 'a week' = 7); 'chart' = open the live candlestick chart of NIFTY50, BANKNIFTY, SENSEX or BTCUSD (id = symbol, optionally followed by a timeframe 1m/5m/15m/1h/1d, e.g. 'SENSEX 15m'). Then answer briefly what is highlighted and why (for subscriptions include status and days left).",
             new
             {
-                target = new { type = "string", @enum = new[] { "containers_down", "container", "signal", "account", "subscription", "subscriptions_expiring" } },
+                target = new { type = "string", @enum = new[] { "containers_down", "container", "signal", "account", "subscription", "subscriptions_expiring", "chart" } },
                 id = Str("container name / client id, signal id, account, subscriber name, or number of days (not needed for containers_down)"),
             }, "target"),
         Tool("get_help",
@@ -133,13 +137,14 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
         ["get_broker_rejections"] = ["reject", "rejection", "alert", "margin", "rms", "why"],
         ["get_exits_and_cleanup"] = ["exit", "in-flight", "inflight", "in flight", "cleanup", "clean up", "mismatch", "orphan", "stuck", "stale"],
         ["get_market_indices"] = ["nifty", "banknifty", "bank nifty", "sensex", "index", "indices", "market"],
+        ["get_stock_quote"] = ["stock", "share", "price", "quote", "trading at", "ltp", "rate of", "worth", "nse", "bse", "equity", "ltd", "limited", "bank", "motors", "industries"],
         ["get_today_activity"] = ["activity", "today", "funnel", "fill rate", "per hour", "how many signals", "orders"],
         ["get_expiring_subscriptions"] = ["subscription", "subscri", "subcri", "expir", "renew", "plan"],
         ["get_signal_accounts"] = ["signal", "didn't get", "did not get", "didnt get", "missed", "which accounts", "not filled", "why did"],
         ["get_symbol_exposure"] = ["exposure", "exposed", "net qty", "net quantity", "strike", " ce", " pe", "across all accounts", "how much are we", "short in", "long in"],
         ["get_unhedged_positions"] = ["hedge", "naked", "unhedged", "unprotected", "protected", "protection"],
         ["get_fyers_orders_today"] = ["order", "rejected", "my reject"],
-        ["show_on_screen"] = ["show", "point", "highlight", "take me", "navi", "nagiv", "go to", "open ", "where is", "where's", "locate", "filter"],
+        ["show_on_screen"] = ["show", "point", "highlight", "take me", "navi", "nagiv", "go to", "open ", "where is", "where's", "locate", "filter", "chart", "graph", "candle"],
         ["get_help"] = ["what does", "what is a", "what's a", "what is the meaning", "mean", "meaning", "explain", "how do i", "how to", "help", "where can i", "what are"],
     };
 
@@ -207,6 +212,9 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
             "get_exits_and_cleanup" => ExitsAndCleanup(S("account")),
             "get_recent_signals" => RecentSignals(S("filter") ?? "all", S("symbol"), S("strategy"), I("limit") ?? 5),
             "get_market_indices" => await IndicesAsync(),
+            "get_stock_quote" => await StockQuoteAsync(S("stocks") ?? S("stock") ?? S("symbol") ?? ""),
+            // charts can be any NSE/BSE stock → resolving needs the (async) symbol master, so it runs outside ShowOnScreen's lock
+            "show_on_screen" when (S("target") ?? "") == "chart" => await ShowChartAsync(S("id")),
             "get_btc_change" => await BtcChangeAsync(D("hours") ?? 24),
             "get_today_activity" => TodayActivity(),
             "get_expiring_subscriptions" => Subscriptions(I("days") ?? 7),
@@ -277,6 +285,14 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
         if (q.Length == 0) return [];
         var exact = store.Accounts.Where(a => a.ClientId == q || a.AccountId.Equals(q, StringComparison.OrdinalIgnoreCase)).ToList();
         if (exact.Count > 0) return exact;
+        // a system user id from User Management ("user 8606", "#8606") → the OMS accounts that user owns
+        var owner = store.Users.FirstOrDefault(u => u.Id.ToString() == q.Replace("user", "", StringComparison.OrdinalIgnoreCase).Trim());
+        if (owner is not null)
+        {
+            var mine = owner.Accounts.Select(l => l.ClientId).ToHashSet();
+            var owned = store.Accounts.Where(a => mine.Contains(a.ClientId)).ToList();
+            if (owned.Count > 0) return owned;
+        }
         return store.Accounts.Where(a => a.AccountId.Contains(q, StringComparison.OrdinalIgnoreCase)
                                       || a.Name.Contains(q, StringComparison.OrdinalIgnoreCase)
                                       || a.Broker.Equals(q, StringComparison.OrdinalIgnoreCase)).Take(5).ToList();
@@ -291,7 +307,7 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
                 return new
                 {
                     found = false, query,
-                    hint = "No demo OMS account matches. If this is Vijay's own account, use get_fyers_account. Client ids look like 1023, 8616, 1360.",
+                    hint = "No demo OMS account matches. If this is Vijay's own account, use get_fyers_account. OMS client ids look like 1023, 8616, 1360; system user ids (User Management, #8601-#8760) are also accepted.",
                 };
             return new
             {
@@ -299,10 +315,12 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
                 accounts = matches.Select(a =>
                 {
                     var c = store.Containers.FirstOrDefault(x => x.ClientId == a.ClientId);
+                    var owner = store.Users.FirstOrDefault(u => u.Accounts.Any(l => l.ClientId == a.ClientId));
                     var alerts = store.AlertAccounts.Where(x => x.AccountId == a.AccountId).Sum(x => x.Open);
                     return new
                     {
                         clientId = a.ClientId, a.Name, a.Broker, brokerAccount = a.AccountId, a.Basket,
+                        systemUser = owner is null ? null : $"#{owner.Id} {owner.Name} (User Management id; the OMS client id is {a.ClientId})",
                         status = a.Status, sessionValid = a.SessionValid, tokenStale = a.TokenStale,
                         strategies = a.Strategies, excludedStrategies = a.ExcludedStrategies,
                         openPositions = a.OpenPositions, closedToday = a.ClosedToday,
@@ -537,6 +555,89 @@ public class AssistantTools(MockDataStore store, DeltaMarketFeed delta, FyersCli
                 default:
                     return new { shown = false, error = $"Unknown target '{target}'." };
             }
+        }
+    }
+
+    // ==================================================================== charts + stock quotes (any NSE/BSE instrument)
+
+    /// <summary>show_on_screen target 'chart': NIFTY 50 / BANK NIFTY / SENSEX / BTCUSD tabs, or ANY stock ("Reliance 15m").</summary>
+    private async Task<object> ShowChartAsync(string? id)
+    {
+        var raw = (id ?? "NIFTY50").Trim();
+        var tf = System.Text.RegularExpressions.Regex.Match(raw, @"\b(1m|5m|15m|1h|1d)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Value.ToLowerInvariant();
+        var name = System.Text.RegularExpressions.Regex.Replace(raw, @"\b(1m|5m|15m|1h|1d|chart|charts|live|graph|candles?)\b", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase).Trim();
+        var key = name.ToUpperInvariant().Replace(" ", "").Replace("-", "") switch
+        {
+            "BTC" or "BTCUSD" or "BITCOIN" or "BTCUSDT" => "BTCUSD",
+            "NIFTY" or "NIFTY50" or "NIFTYFIFTY" => "NIFTY50",
+            "BANKNIFTY" or "NIFTYBANK" or "BNF" => "BANKNIFTY",
+            "SENSEX" or "BSESENSEX" => "SENSEX",
+            _ => null,
+        };
+        string label, source;
+        if (key is not null)
+        {
+            label = key switch { "NIFTY50" => "NIFTY 50", "BANKNIFTY" => "BANK NIFTY", _ => key };
+            source = key == "BTCUSD" ? "Delta Exchange (live 24x7)" : "Fyers historical data + live quotes (needs a valid Fyers session; market hours 09:15–15:30 IST)";
+        }
+        else
+        {
+            var hit = await symbols.ResolveAsync(name);
+            if (hit is null) return new { shown = false, error = $"No NSE/BSE stock or index matches '{name}'. Try the company name or its NSE symbol." };
+            key = hit.Ticker; label = $"{hit.Name} ({hit.Ticker})";
+            source = "Fyers historical data + live quotes (needs a valid Fyers session; market hours 09:15–15:30 IST)";
+        }
+        var q = new Dictionary<string, string> { ["symbol"] = key };
+        if (tf.Length > 0) q["tf"] = tf;
+        Action = new UiAction("/admin/market-charts", q, [new UiTarget("chart:" + key, $"{label} live chart{(tf.Length > 0 ? " · " + tf : "")}")], null);
+        return new { shown = true, page = "Market Charts", symbol = label, timeframe = tf.Length > 0 ? tf : "5m", source };
+    }
+
+    /// <summary>Live quotes for any NSE/BSE stocks / indices, e.g. "Reliance, TCS and HDFC Bank".</summary>
+    private async Task<object> StockQuoteAsync(string stocks)
+    {
+        var names = System.Text.RegularExpressions.Regex.Split(stocks, @",|;|\band\b|&(?=\s)", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+            .Select(s => s.Trim()).Where(s => s.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToList();
+        if (names.Count == 0) return new { error = "Name at least one stock, e.g. 'Reliance' or 'TCS, Infosys'." };
+        var found = new List<(string Asked, FyersInstrument I)>();
+        var unknown = new List<object>();
+        foreach (var n in names)
+        {
+            var hits = await symbols.SearchAsync(n, 3);
+            if (hits.Count > 0) found.Add((n, hits[0]));
+            else unknown.Add(new { asked = n, note = "No NSE/BSE listing matches this name." });
+        }
+        if (found.Count == 0) return new { error = "None of these matched an NSE/BSE listing.", unknown };
+        if (!fyers.Configured) return new { connected = false, error = "Fyers is not connected. Log in on Broker Live → Login with Fyers to get live stock prices.", matched = found.Select(f => f.I.Ticker) };
+        try
+        {
+            var res = await fyers.Quotes(string.Join(',', found.Select(f => f.I.Ticker).Distinct()));
+            var byTicker = res.D.Where(d => d.V is not null).ToDictionary(d => d.N ?? "", d => d.V!);
+            var istNow = MockDataStore.NowIst;
+            var open = istNow.DayOfWeek is not (DayOfWeek.Saturday or DayOfWeek.Sunday) && istNow.TimeOfDay >= new TimeSpan(9, 15, 0) && istNow.TimeOfDay <= new TimeSpan(15, 30, 0);
+            return new
+            {
+                currency = "INR", marketOpen = open,
+                note = open ? "Live prices (NSE/BSE are open)." : "NSE/BSE are closed now: these are the last traded prices of the latest session.",
+                quotes = found.Select(f =>
+                {
+                    byTicker.TryGetValue(f.I.Ticker, out var v);
+                    return v is null
+                        ? (object)new { asked = f.Asked, f.I.Name, symbol = f.I.Ticker, error = "No quote returned" }
+                        : new
+                        {
+                            asked = f.Asked, f.I.Name, symbol = f.I.Ticker,
+                            summary = $"{f.I.Name} ({f.I.Ticker}): {Inr(v.Lp)} {(v.Ch >= 0 ? "+" : "")}{v.Ch:0.00} ({(v.Chp >= 0 ? "+" : "")}{v.Chp:0.00}%)",
+                            last = Inr(v.Lp), change = $"{(v.Ch >= 0 ? "+" : "")}{v.Ch:0.00}", changePct = $"{(v.Chp >= 0 ? "+" : "")}{v.Chp:0.00}%",
+                            open = Inr(v.Open), high = Inr(v.High), low = Inr(v.Low), prevClose = Inr(v.PrevClose), volume = v.Volume,
+                        };
+                }),
+                unknown,
+            };
+        }
+        catch (FyersException ex) when (ex.Status == 401)
+        {
+            return new { connected = false, error = "The Fyers session has expired. Renew it on Broker Live (Fyers) → Renew with PIN, then ask again.", matched = found.Select(f => f.I.Ticker) };
         }
     }
 

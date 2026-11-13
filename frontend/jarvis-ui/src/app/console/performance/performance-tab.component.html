@@ -10,7 +10,7 @@
       <span class="label-caps">Accounts</span>
       <button [class.on]="!uws.accFilter()" (click)="uws.accFilter.set('')">All {{ w.brokerAccounts.length }}</button>
       @for (a of w.brokerAccounts; track a.clientId) {
-        <button [class.on]="uws.accFilter() === a.clientId" (click)="uws.accFilter.set(a.clientId)"><small>{{ a.broker }}</small> {{ a.accountId }}</button>
+        <button [class.on]="uws.accFilter() === a.clientId" (click)="uws.accFilter.set(a.clientId)" [title]="a.inOms ? 'OMS client ' + a.clientId : 'Not in the OMS book'"><small>{{ a.broker }}</small> {{ a.accountId }}@if (a.inOms) { <small class="oms">· {{ a.clientId }}</small> }</button>
       }
     </span>
   }

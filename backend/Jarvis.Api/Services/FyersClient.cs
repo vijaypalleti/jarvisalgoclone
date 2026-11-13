@@ -90,6 +90,26 @@ public class FyersClient(HttpClient http, IConfiguration config, IMemoryCache ca
     public Task<FyersTrades> Trades() => Get<FyersTrades>("api/v3/tradebook", TimeSpan.FromSeconds(3));
     public Task<FyersHoldings> Holdings() => Get<FyersHoldings>("api/v3/holdings", TimeSpan.FromSeconds(30));
     public Task<FyersQuotes> Quotes(string symbols) => Get<FyersQuotes>($"data/quotes?symbols={Uri.EscapeDataString(symbols)}", TimeSpan.FromSeconds(2));
+    /// <summary>Historical candles (read-only market data). resolution: "1", "5", "15", "60" or "D"; range as unix seconds.</summary>
+    public Task<FyersHistory> History(string symbol, string resolution, long fromUnix, long toUnix) =>
+        Get<FyersHistory>($"data/history?symbol={Uri.EscapeDataString(symbol)}&resolution={resolution}&date_format=0&range_from={fromUnix}&range_to={toUnix}&cont_flag=1",
+            TimeSpan.FromSeconds(resolution == "D" ? 300 : 15));
+
+    // Fyers Standard plan: max 5 requests/second for the whole app (poller + charts + assistant share it).
+    // Space every call ≥ 220 ms apart so bursts queue up instead of being rejected.
+    private static readonly SemaphoreSlim Gate = new(1, 1);
+    private static DateTime _lastCall = DateTime.MinValue;
+    private static async Task Pace()
+    {
+        await Gate.WaitAsync();
+        try
+        {
+            var wait = _lastCall.AddMilliseconds(220) - DateTime.UtcNow;
+            if (wait > TimeSpan.Zero) await Task.Delay(wait);
+            _lastCall = DateTime.UtcNow;
+        }
+        finally { Gate.Release(); }
+    }
 
     private async Task<T> Get<T>(string path, TimeSpan ttl) where T : FyersEnvelope
     {
@@ -98,15 +118,25 @@ public class FyersClient(HttpClient http, IConfiguration config, IMemoryCache ca
         var key = $"fyers:{ClientId}:{path}";
         if (cache.TryGetValue(key, out T? cached) && cached is not null) return cached;
 
-        using var req = new HttpRequestMessage(HttpMethod.Get, path);
-        req.Headers.TryAddWithoutValidation("Authorization", $"{ClientId}:{Token}");
-        req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        HttpResponseMessage res = null!;
+        T? parsed = null;
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            await Pace();
+            using var req = new HttpRequestMessage(HttpMethod.Get, path);
+            req.Headers.TryAddWithoutValidation("Authorization", $"{ClientId}:{Token}");
+            req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-        using var res = await http.SendAsync(req);
-        var body = await res.Content.ReadAsStringAsync();
-        T? parsed;
-        try { parsed = JsonSerializer.Deserialize<T>(body, JsonOpts); }
-        catch (JsonException) { throw new FyersException($"Unexpected Fyers response ({(int)res.StatusCode}).", 502); }
+            res?.Dispose();
+            res = await http.SendAsync(req);
+            var body = await res.Content.ReadAsStringAsync();
+            try { parsed = JsonSerializer.Deserialize<T>(body, JsonOpts); }
+            catch (JsonException) { throw new FyersException($"Unexpected Fyers response ({(int)res.StatusCode}).", 502); }
+            // -360 / 429 = "Standard plan limit of 5 requests/second": wait a second and try once more
+            if (attempt == 0 && (parsed?.Code == -360 || (int)res.StatusCode == 429)) { await Task.Delay(1100); continue; }
+            break;
+        }
+        using var _ = res;
 
         if (parsed is null || parsed.S != "ok")
         {
@@ -239,6 +269,8 @@ public class FyersHolding
     [JsonPropertyName("pl")] public decimal Pl { get; set; }
 }
 
+/// <summary>data/history: candles = [[epochSeconds, open, high, low, close, volume], …]</summary>
+public class FyersHistory : FyersEnvelope { [JsonPropertyName("candles")] public List<List<decimal>> Candles { get; set; } = new(); }
 public class FyersQuotes : FyersEnvelope { [JsonPropertyName("d")] public List<FyersQuote> D { get; set; } = new(); }
 public class FyersQuote
 {

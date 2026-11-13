@@ -56,7 +56,10 @@
   &:hover { background: var(--surface-2); }
   &.sel { background: #ecfeff; border-color: #a5f3fc; }
   .num { width: 30px; height: 30px; border-radius: 7px; border: 1px solid var(--border); display: grid; place-items: center; font-size: 12px; flex-shrink: 0; background: var(--surface); }
-  .who { flex: 1; min-width: 0; strong { font-size: 13px; } div { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 2px; } .pill { font-size: 9.5px; } }
+  .who { flex: 1; min-width: 0;
+    strong { display: flex; align-items: baseline; gap: 8px; font-size: 13px; min-width: 0; }
+    .uname { font-weight: 500; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    div { display: flex; align-items: center; gap: 6px; font-size: 11px; margin-top: 2px; } .pill { font-size: 9.5px; } }
   .cnts { display: flex; flex-direction: column; align-items: flex-end; font-size: 11.5px; color: var(--text-2); b { color: var(--text); } small { font-size: 10px; color: var(--muted); } }
 }
 :host-context([data-theme='dark']) .acct.sel { background: #0f3236; border-color: #155e75; }
@@ -105,3 +108,6 @@ tbody tr { cursor: pointer; &:hover > td { background: var(--surface-2); } &.ope
   .wide { grid-column: span 2; }
 }
 .empty { text-align: center; color: var(--muted); padding: 28px; &.big { padding: 80px; } }
+
+/* user name next to the client id in the account detail header */
+.detail header h3 .uname { font-weight: 600; color: var(--text); margin-left: 4px; }

@@ -8,7 +8,7 @@ Everything you can ask **Jarvis Assistant** (the ✦ chat button at the bottom r
 
 **Which accounts are which**
 - **"Vijay"**, "my account", "me" or "Fyers" = your **real Fyers account**.
-- **Client ids** (1023, 8616, 1360…) = the demo OMS book. Account lookups also accept "client 1023", "broker account #1023", the broker account number (e.g. 52062393), a person's name ("Kavya Nair") or a broker ("ANT").
+- **Client ids** (1023, 8616, 1360…) = the demo OMS book. **User ids** from User Management ("User #8606") work too: "pnl of 8606" → Lakshmi Nair = OMS client 1360. Account lookups also accept "client 1023", "broker account #1023", the broker account number (e.g. 52062393), a person's name ("Kavya Nair") or a broker ("ANT").
 
 ---
 
@@ -22,6 +22,8 @@ Everything you can ask **Jarvis Assistant** (the ✦ chat button at the bottom r
 | What were BTC's high and low today? | `get_btc_change` | e.g. "in the last 24 hours" |
 | ✅ Where are NIFTY, BANK NIFTY and SENSEX right now? | `get_market_indices` | 🔒 real Fyers quotes; otherwise only the **simulated** NIFTY (it says so) |
 | Is NIFTY up or down today? | `get_market_indices` | |
+| ✅ What is the current price of Reliance? | `get_stock_quote` | 🔒 Any NSE/BSE stock: last price, change, change %, open, high, low, previous close, volume. Names, nicknames ("SBI", "L&T", "Zomato") or symbols. Outside market hours: the last session's prices |
+| ✅ Price of TCS, Infosys and HDFC Bank | `get_stock_quote` | Several stocks in one question (one Fyers call) |
 
 ## 2. Vijay's real Fyers account 🔒
 
@@ -141,6 +143,7 @@ The assistant opens the right console tab, clears filters that would hide the it
 | ✅ Show me signal 506 | `show_on_screen` (`signal`) | Live Signals filtered to that signal (correlation id + its day), row highlighted |
 | ✅ Take me to the positions of client 1023 | `show_on_screen` (`account`) | Positions & Exits filtered to 1023, account selected and highlighted |
 | ✅ Navigate to Mohan Saxena's subscription status | `show_on_screen` (`subscription`) | **Basket Subscriptions** filtered to that subscriber (name, user ID or broker account), their rows highlighted with basket · status · days left; the answer states the status |
+| ✅ Open NIFTY50 chart / open BTC chart / open SENSEX live chart / ✅ open Reliance chart | `show_on_screen` (`chart`) | **Market Charts** on that symbol (NIFTY 50, BANK NIFTY, SENSEX, BTCUSD or **any NSE/BSE stock**), chart highlighted. Add a timeframe: "open SENSEX 15m chart" (1m / 5m / 15m / 1h / 1d) |
 | ✅ Navigate to the subscriptions expiring within a week | `show_on_screen` (`subscriptions_expiring`) | **Basket Subscriptions** on *Active* with **Expiring: within 7 days** set in the filter panel, every matching row highlighted. "in 15 days" etc. also work (1–90) |
 
 It only *shows*: it never restarts, stops or exits anything. Typos are fine ("naviagate", "subcriptions"). When you say *navigate / show me / take me to / open / point / highlight*, the assistant is told it must open the page, not just answer in text. When several table rows are highlighted, one label sits on the top row; hover any row for its own details. By voice: *"Jarvis, show me the container that's down"*; the screen un-dims so you can see the highlight.

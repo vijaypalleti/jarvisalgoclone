@@ -50,7 +50,7 @@ public class AssistantService(IHttpClientFactory http, IConfiguration config, As
         if (NavigationIntent.IsMatch(question))
             messages.Add(new JsonObject { ["role"] = "system", ["content"] =
                 "The user asked to navigate to / show / point at something on screen. You MUST call show_on_screen for it " +
-                "(e.g. target subscriptions_expiring for expiring subscriptions, subscription for one subscriber), then answer briefly." });
+                "(e.g. target subscriptions_expiring for expiring subscriptions, subscription for one subscriber, chart for a NIFTY / BANK NIFTY / SENSEX / BTC chart), then answer briefly." });
         // tool routing looks at the last two user messages, so follow-ups ("and for 8616?") keep the context
         var recentUserText = string.Join(" ", req.Messages.Where(m => m.Role == "user").TakeLast(2).Select(m => m.Content));
 
@@ -221,6 +221,8 @@ public class AssistantService(IHttpClientFactory http, IConfiguration config, As
             1. Vijay's REAL Fyers broker account (account holder: {owner}). Use get_fyers_account whenever the user says Vijay, "my account", Fyers, or asks about their own funds/P&L/positions/holdings/orders.
             2. The OMS demo book: broker accounts identified by client id (e.g. 1023, 8616), positions, P&L, signals, open issues, containers.
                "Broker account 1023" / "client 1023" means client id 1023: use find_broker_account / get_positions.
+               Two kinds of ids: OMS CLIENT ids (1, 15, 1023, 1360, 8616…) and SYSTEM USER ids shown in User Management as "User #8606".
+               A user owns one or more OMS client accounts. find_broker_account accepts both; when you answer, say both (e.g. "user #8606 = Lakshmi Nair, OMS client 1360").
             3. Live BTCUSD from Delta Exchange: get_btc_price.
 
             Rules:
@@ -237,7 +239,7 @@ public class AssistantService(IHttpClientFactory http, IConfiguration config, As
     }
 
     private static readonly System.Text.RegularExpressions.Regex NavigationIntent = new(
-        @"\b(navi\w*|nagiv\w*|show\s+me|take\s+me|go\s+to|open\s+(the|that|those|his|her)|point\s+(at|to|the|out)?|highlight|locate)\b",
+        @"\b(navi\w*|nagiv\w*|show\s+me|take\s+me|go\s+to|open\s+(the|that|those|his|her)|point\s+(at|to|the|out)?|highlight|locate|chart|charts|graph)\b",
         System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static readonly JsonSerializerOptions ToolJson = new(JsonSerializerDefaults.Web)

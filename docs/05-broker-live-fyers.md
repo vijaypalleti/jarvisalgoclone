@@ -10,7 +10,7 @@ Credentials are stored in .NET **user-secrets**, outside the repository:
 
 ```powershell
 cd "C:\Users\pvija\OneDrive\Documents\CodeLineTech\Jarvis(demo)\backend\Jarvis.Api"
-dotnet user-secrets set "Fyers:ClientId"    "<APP_ID>-200"
+dotnet user-secrets set "Fyers:ClientId"    "GFHMZKHCO7-200"
 dotnet user-secrets set "Fyers:AccessToken" "<today's access token>"
 ```
 

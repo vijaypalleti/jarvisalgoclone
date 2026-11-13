@@ -29,6 +29,8 @@ Its own guide: [04-live-signals.md](04-live-signals.md).
 
 ## Positions & Exits (`console/positions/`)
 
+- Each broker account shows **client id + the person's name** (e.g. *1023 Kavya Nair*) with broker · #account below. The detail header shows the name too. Search matches client id, account, name or symbol.
+
 | Sub-tab | Shows |
 |---|---|
 | Position Tracking | Broker accounts on the left. The right side shows the selected account's positions (side, quantities, averages, realized/unrealized P&L, flags, signal trace) and order history. Each position can be force-exited |
@@ -65,6 +67,12 @@ Pick a user once (in any sub-tab, or via **Trading → ⋮ → Manage User**) an
 | **Subscriptions & Billing** (`user-billing.component.ts`) | No production screenshot, so it's built in the same style.<br>Tiles: lifetime value, outstanding (pending or failed), active plans (monthly equivalent), next renewal.<br>Subscriptions with price (demo: ₹2,499 per month; 10 % off for 6 months, 20 % off for 12), **Renew +1 month**, **Pause / Activate**.<br>Payments (invoice, method, status) with **Mark paid**. A new subscription creates a pending payment. |
 
 ## Performance → User Management (`console/performance/user-management.component.*`)
+
+> **Two ids.**
+> - **User #8606** is the *system user* (the person).
+> - **OMS client 1360** is their broker account in the trading book, used by Positions & Exits, Live Signals, Trading, Infrastructure containers and the assistant.
+>
+> The header and the Broker Accounts table (*OMS client ID* column) show both. The ACCOUNTS pills show *broker code · OMS client id*. Accounts that aren't trading in the OMS demo book show "—". You can ask the assistant with either id.
 
 Everything a system user **owns**. All of it is demo data; every change edits only the in-memory store and is lost when the API restarts.
 
@@ -110,6 +118,30 @@ Every subscriber's basket subscriptions in one list, to monitor them and to **ex
   - **Delete** (asks first).
 - **Paging:** First / Previous / 5 page numbers / Next / Last, Total, and 10 / 20 / 50 / 100 items per page. Newest start date first.
 - **Demo data:** about 120 subscriptions, including expired and cancelled ones. The Overview's *Subscriptions ending in 7 days*, *Subscription Watch*, the Subscriptions Track tile and the assistant all read these same subscriptions, so they always agree with this page. Prices are demo prices (₹2,499 per month; 10 % off for 6 months, 20 % off for 12), not the production plan prices.
+
+## Market Charts (`pages/market-charts/`, route `/admin/market-charts`)
+
+Candlestick charts for **NIFTY 50**, **BANK NIFTY**, **SENSEX** and **any NSE/BSE stock or index** (Fyers historical data, read-only, using your Fyers session) and **BTCUSD** (Delta Exchange). It's in the sidebar under *Market Charts*.
+
+- **Stock search** (top right):
+  - Type a company name, nickname or symbol ("Reliance", "HDFC Bank", "SBI", "L&T", "NSE:INFY-EQ") and pick a result; Enter takes the first one.
+  - The stock appears as a 5th card with ✕ to remove it, with a volume histogram (indices have no volume).
+  - URL: `?symbol=NSE:HDFCBANK-EQ`.
+- **Symbol lookup:** `Services/FyersSymbols.cs` uses Fyers' **public** symbol master (`public.fyers.in/sym_details/NSE_CM.csv` and `BSE_CM.csv`; no login, no account data).
+  - It's downloaded on first use and refreshed daily; a copy is kept in `%LOCALAPPDATA%\JarvisDemo\symbols\`, so restarts and offline use work.
+  - It keeps about 4,000 cash-market equities and indices, and prefers NSE over BSE.
+  - Nicknames (SBI, HUL, Airtel, Kotak, Axis, HCL, Zomato → ETERNAL, L&T…) are in `IndexAliases`.
+
+- **Timeframes:** 1m / 5m / 15m / 1h / 1d (300 candles; 1d covers about a year).
+- **The header** shows last price, change %, open, high and low:
+  - indices: from Fyers quotes every 5 s, falling back to the latest candle if no quote has arrived;
+  - BTC: from the live Delta ticker.
+- **Live updates:**
+  - The indices' last candle moves only during market hours (Mon–Fri 09:15–15:30 IST; holidays aren't checked). Outside them the badge says *Market closed · last session*.
+  - BTC is live 24×7 from the Delta trade stream.
+- **URL:** `/admin/market-charts?symbol=NIFTY50|BANKNIFTY|SENSEX|BTCUSD&tf=5m`. The assistant opens charts this way.
+- **If Fyers isn't logged in or the session expired,** the chart says so, with a button to Broker Live (Fyers). BTC works without Fyers.
+- **API** (`Controllers/MarketChartsController.cs`): `GET /api/market/candles?symbol=&resolution=&count=`, `GET /api/market/quote?symbol=`, `GET /api/market/quotes?symbols=RELIANCE,TCS` (up to 50 in one Fyers call) and `GET /api/market/search?q=`. `symbol` can be a tab key (NIFTY50), a ticker (NSE:RELIANCE-EQ) or a name (Reliance). BTC uses `/api/delta/candles`.
 
 ## Infrastructure (`console/infrastructure/`)
 

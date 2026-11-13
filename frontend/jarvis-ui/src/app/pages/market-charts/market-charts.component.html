@@ -1,0 +1,64 @@
+<header class="phead">
+  <span class="picon"><app-icon name="trending-up" [size]="24" /></span>
+  <div>
+    <h1>Market Charts</h1>
+    <p>Any NSE/BSE stock or index from Fyers (read-only), BTCUSD from Delta Exchange. The last candle updates live.</p>
+  </div>
+  <span class="sp"></span>
+  <div class="search" (focusout)="searchOpen.set(false)">
+    <app-icon name="search" [size]="15" />
+    <input placeholder="Search any stock: Reliance, TCS, HDFC Bank…" [value]="q()" (input)="onSearch($any($event.target).value)"
+           (focus)="searchOpen.set(true)" (keydown.enter)="searchEnter()" (keydown.escape)="searchOpen.set(false)" aria-label="Search stocks" />
+    @if (searchOpen() && q().trim()) {
+      <div class="results" (mousedown)="$event.preventDefault()">
+        @for (h of hits(); track h.ticker) {
+          <button (click)="choose(h)"><b>{{ h.symbol }}</b><span>{{ h.name }}</span><small>{{ h.exchange }}{{ h.series === 'INDEX' ? ' · index' : '' }}</small></button>
+        } @empty { <div class="none">No NSE/BSE listing matches “{{ q() }}”.</div> }
+      </div>
+    }
+  </div>
+</header>
+
+<div class="syms" [class.five]="custom()">
+  @for (s of symbols; track s.key) {
+    <button [class.on]="symbol() === s.key" (click)="pick(s.key)"><b>{{ s.name }}</b><small>{{ s.sub }}</small></button>
+  }
+  @if (custom(); as c) {
+    <button class="custom" [class.on]="symbol() === c.key" (click)="pick(c.key)">
+      <b>{{ c.name }}</b><small>{{ c.key }}</small>
+      <span class="x" title="Remove" (click)="$event.stopPropagation(); closeCustom()">✕</span>
+    </button>
+  }
+</div>
+
+<section class="card chart-card" [attr.data-ai-target]="'chart:' + symbol()">
+  <div class="ch">
+    <div class="title">
+      <h2>{{ meta().name }}</h2>
+      @if (head(); as h) {
+        <span class="last mono">{{ meta().ccy }}{{ h.last | number: '1.2-2' }}</span>
+        <span class="chg mono" [class.up]="h.changePct >= 0" [class.down]="h.changePct < 0">{{ h.changePct >= 0 ? '▲' : '▼' }} {{ h.changePct | number: '1.2-2' }}%</span>
+        <span class="ohl mono">O {{ h.open | number: '1.2-2' }} · H {{ h.high | number: '1.2-2' }} · L {{ h.low | number: '1.2-2' }}</span>
+      }
+      @if (isBtc()) { <span class="badge live">● LIVE · 24×7</span> }
+      @else if (marketOpen()) { <span class="badge live">● LIVE · market open</span> }
+      @else { <span class="badge closed">Market closed · last session</span> }
+    </div>
+    <span class="sp"></span>
+    <div class="tfs">
+      @for (t of tfs; track t) { <button [class.on]="tf() === t" (click)="setTf(t)">{{ t }}</button> }
+    </div>
+    <button class="btn sm" (click)="reload()" title="Reload candles"><app-icon name="refresh" [size]="12" /></button>
+  </div>
+  <div class="chart-wrap">
+    <div #chartEl class="chart"></div>
+    @if (loading()) { <div class="overlay">Loading candles…</div> }
+    @if (error(); as e) {
+      <div class="overlay err">
+        <p>{{ e.text }}</p>
+        @if (e.login) { <a class="btn sm primary" routerLink="/admin/broker-live">Open Broker Live (Fyers)</a> }
+      </div>
+    }
+  </div>
+  <div class="foot muted">{{ count() }} candles · {{ tf() }} · IST @if (!isBtc()) { · quotes every 5 s }</div>
+</section>

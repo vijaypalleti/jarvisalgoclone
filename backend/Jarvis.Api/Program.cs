@@ -18,6 +18,9 @@ builder.Services.AddHttpClient<FyersClient>(c =>
 });
 
 // Delta Exchange — public market data, no login
+// Fyers PUBLIC symbol master (name → NSE:RELIANCE-EQ); no login, no account data
+builder.Services.AddHttpClient("fyers-public", c => { c.BaseAddress = new Uri("https://public.fyers.in/"); c.Timeout = TimeSpan.FromSeconds(60); });
+builder.Services.AddSingleton<FyersSymbols>();
 builder.Services.AddHttpClient("delta", c =>
 {
     c.BaseAddress = new Uri(builder.Configuration["Delta:RestUrl"] ?? "https://api.india.delta.exchange/");

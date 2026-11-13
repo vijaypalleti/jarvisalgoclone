@@ -20,6 +20,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/crypto-live/crypto-live.component').then(m => m.CryptoLiveComponent),
       },
       {
+        path: 'admin/market-charts',
+        loadComponent: () => import('./pages/market-charts/market-charts.component').then(m => m.MarketChartsComponent),
+      },
+      {
         path: 'admin/basket-subscriptions',
         loadComponent: () => import('./pages/basket-subscriptions/basket-subscriptions.component').then(m => m.BasketSubscriptionsComponent),
       },

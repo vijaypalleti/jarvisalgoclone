@@ -26,6 +26,8 @@ export class UserManagementComponent {
   algoOn = computed(() => this.svc.brokerRows().filter(a => a.algoOn).length);
   activeSubs = computed(() => this.svc.subRows().filter(s => s.status === 'Active').length);
   multipliers = computed(() => [...new Set(this.svc.basketRows().map(b => b.multiplier))]);
+  /** the OMS client id(s) this user owns, e.g. "1360" or "1023, 117" ('' = none trading in the OMS) */
+  omsIds = computed(() => (this.svc.ws()?.brokerAccounts ?? []).filter(a => a.inOms).map(a => a.clientId).join(', '));
   initials = initials;
   plural = plural;
 

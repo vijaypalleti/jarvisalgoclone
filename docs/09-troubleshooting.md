@@ -157,6 +157,10 @@ Check the system volume and output device. Some browsers need one click on the p
 | A `<select [value]>` shows the first option instead of the bound one | Bind `[selected]` on each `<option>` instead |
 | Styles bleed between `.sm` and `.btn.sm` | Use distinct class names (`.tiny`, `.w120`) |
 
+### Index charts: "You've reached the Standard plan limit of 5 requests/second"
+**Cause:** the Fyers Standard plan allows 5 API calls per second for the whole app (the poller, Market Charts and the assistant share it).
+**Fix:** this is already handled. `FyersClient` spaces calls at least 220 ms apart and retries once after 1 s on error -360. If it keeps happening, raise `Fyers:Poll:Seconds` (poll less often) or close extra chart tabs.
+
 ### SQL queries are very slow (30–90 s) or the persisters fall behind
 **Cause:** SQL Express is short of memory. When Windows has little free RAM (WSL, Chrome, VS Code, SSMS, ng serve…), SQL Server shrinks its cache. Queries that sort or group, and the app's bulk inserts, then wait on `RESOURCE_SEMAPHORE` (a memory grant).
 **Check:** `SELECT session_id, wait_type FROM sys.dm_exec_requests WHERE wait_type = 'RESOURCE_SEMAPHORE'`, and `SELECT process_physical_memory_low FROM sys.dm_os_process_memory` (1 = under pressure).
